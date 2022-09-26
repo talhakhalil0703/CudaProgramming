@@ -12,6 +12,8 @@ void read_file(struct options_t* args,
   	// Open file
 	std::ifstream in;
 	in.open(args->inputfilename);
+    if (in.is_open()){
+
 	// Get num vals
 	in >> *number_of_values;
 
@@ -28,7 +30,11 @@ void read_file(struct options_t* args,
         }
         points[i] = point;
     }
-    input_vals = &points;
+    *input_vals = points;
+    in.close();
+    } else{
+        std::cout << "Could not open file" << std::endl;
+    }
 }
 
 void free_input_points(double ** input, int number_of_values){

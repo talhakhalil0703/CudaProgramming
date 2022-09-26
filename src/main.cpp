@@ -15,14 +15,11 @@ int main(int argc, char **argv)
 
     // Start timer
     auto start = std::chrono::high_resolution_clock::now();
-    print_opts(&opts);
     // Set the seed for random.
     kmeans_set_rand_seed(opts.seed);
     double ** vals;
     int number_of_values;
     read_file(&opts, &number_of_values, &vals, &vals);
-    printf("Worked here");
-    print_points(vals, number_of_values, opts.dims);
 
     //End timer and print out elapsed
     auto end = std::chrono::high_resolution_clock::now();

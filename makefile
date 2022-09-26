@@ -11,7 +11,7 @@ compile:
 	$(CC) $(SRCS) $(OPTS) -O3 -I$(INC) -o $(EXEC)
 
 debug:
-	$(CC) $(SRCS) $(OPTS) -g -I$(INC) -o $(EXEC)
+	$(CC) $(SRCS) $(OPTS) -g -I$(INC) -o $(EXEC)_debug
 
 clean:
 	rm -f $(EXEC)

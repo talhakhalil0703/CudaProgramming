@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/kmeans_debug",
-            "args": [
+            "args": [ // ./bin/kmeans -k 16 -d 16 -i input/random-n2048-d16-c16.txt -m 150 -t 123 -s 8675309 -c -p
                 "-k",
                 "16",
                 "-d",
@@ -19,7 +19,7 @@
                 "-m",
                 "150",
                 "-t",
-                "123",
+                "0.000001",
                 "-s",
                 "8675309",
                 "-c",

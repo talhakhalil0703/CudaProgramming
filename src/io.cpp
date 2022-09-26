@@ -1,6 +1,7 @@
 #include "io.h"
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 
 void read_file(struct options_t* args,
                double***             input_vals,
@@ -44,10 +45,11 @@ void free_input_points(double ** input, int number_of_values){
 }
 
 void print_points(double ** input, int number_of_values, int dimensions){
+    std::cout << std::setprecision(5) << std::fixed;
     for (int i =0; i < number_of_values; i++) {
-        std::cout << i << ": ";
+        std::cout << i;
         for (int j =0; j < dimensions; j++){
-            std::cout << input[i][j] << " ";
+            std::cout << " " << input[i][j] ;
         }
         std::cout << std::endl;
     }

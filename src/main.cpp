@@ -4,6 +4,7 @@
 #include "argparse.h"
 #include "random.h"
 #include "io.h"
+#include "kmeans_cpu.h"
 
 using namespace std;
 
@@ -20,7 +21,7 @@ int main(int argc, char **argv)
     double ** vals;
     int number_of_values;
     read_file(&opts, &number_of_values, &vals, &vals);
-
+    kmeans_cpu(vals, opts.num_cluster, number_of_values, opts);
     //End timer and print out elapsed
     auto end = std::chrono::high_resolution_clock::now();
     auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);

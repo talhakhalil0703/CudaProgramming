@@ -11,10 +11,3 @@ int kmeans_rand() {
 void kmeans_set_rand_seed(unsigned int seed) {
     next = seed;
 }
-
-// for (int i=0; i<k; i++){
-//     int index = kmeans_rand() % _numpoints;
-//     // you should use the proper implementation of the following
-//     // code according to your data structure
-//     centers[i] = points[index];
-// }

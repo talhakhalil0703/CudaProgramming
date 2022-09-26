@@ -46,7 +46,7 @@ void free_input_points(double ** input, int number_of_values){
 
 void print_points(double ** input, int number_of_values, int dimensions){
     for (int i =0; i < number_of_values; i++) {
-        std::cout << i+1 << ": ";
+        std::cout << i << ": ";
         for (int j =0; j < dimensions; j++){
             std::cout << input[i][j] << " ";
         }

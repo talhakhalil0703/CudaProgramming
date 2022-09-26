@@ -19,12 +19,11 @@ int main(int argc, char **argv)
     // Set the seed for random.
     kmeans_set_rand_seed(opts.seed);
     double ** vals;
-    int number_of_values;
-    read_file(&opts, &number_of_values, &vals, &vals);
-    kmeans_cpu(vals, opts.num_cluster, number_of_values, opts);
+    read_file(&opts, &vals, &vals);
+    kmeans_cpu(vals, opts.num_cluster, opts);
     //End timer and print out elapsed
     auto end = std::chrono::high_resolution_clock::now();
     auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     std::cout << "time: " << diff.count() << " us" <<std::endl;
-    free_input_points(vals, number_of_values);
+    free_input_points(vals, opts.number_of_values);
 }

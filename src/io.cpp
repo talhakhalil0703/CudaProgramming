@@ -3,7 +3,6 @@
 #include <fstream>
 
 void read_file(struct options_t* args,
-               int*              number_of_values,
                double***             input_vals,
                double***             output_vals) {
 
@@ -15,13 +14,13 @@ void read_file(struct options_t* args,
     if (in.is_open()){
 
 	// Get num vals
-	in >> *number_of_values;
+	in >> args->number_of_values;
 
     double ** points;
     int garbage;
-    points = (double **) malloc (*number_of_values * sizeof(double *));
+    points = (double **) malloc (args->number_of_values * sizeof(double *));
     double * point;
-    for (int i =0; i < *number_of_values; i++){
+    for (int i =0; i < args->number_of_values; i++){
         //discard the first value this is the index, starting from 1...
         in >> garbage;
         point = (double *) malloc (dimensions * sizeof(double));

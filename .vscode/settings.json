@@ -53,6 +53,21 @@
         "thread": "cpp",
         "cfenv": "cpp",
         "cinttypes": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "bit": "cpp",
+        "codecvt": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "condition_variable": "cpp",
+        "unordered_set": "cpp",
+        "random": "cpp",
+        "source_location": "cpp",
+        "future": "cpp",
+        "mutex": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp",
+        "valarray": "cpp",
+        "variant": "cpp"
     }
 }

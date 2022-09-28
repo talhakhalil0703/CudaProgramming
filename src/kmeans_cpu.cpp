@@ -3,6 +3,7 @@
 #include "io.h"
 #include <cmath>
 #include <limits>
+#include <chrono>
 
 void kmeans_cpu(double **dataset, int clusters, options_t &args) {
 
@@ -18,9 +19,12 @@ void kmeans_cpu(double **dataset, int clusters, options_t &args) {
   double ** old_centroids = NULL;
   bool done = false;
   int * labels;
+  double duration_total = 0;
 
   while(!done){
     //copy
+    auto start = std::chrono::high_resolution_clock::now();
+
     old_centroids = copy_double(centroids, args);
 
     iterations++;
@@ -45,13 +49,16 @@ void kmeans_cpu(double **dataset, int clusters, options_t &args) {
     free(old_centroids);
 
     // free labels, only if not done
+    auto end = std::chrono::high_resolution_clock::now();
+    int duration = std::chrono::duration_cast<std::chrono::milliseconds>( end - start ).count();
+    duration_total += duration;
     if (!done) free (labels);
-    printf("Iterations : %d\n", iterations);
-    // print_points(centroids, args.num_cluster, args.dims);
   }
   args.labels = labels;
+  printf("%d,%lf\n", iterations, duration_total/iterations);
+
   // TODO: Convert centroids to singular and attach here as well to args
-  print_points(centroids, args.num_cluster, args.dims);
+  // print_points(centroids, args.num_cluster, args.dims);
 }
 
 int * find_nearest_centroids(double ** dataset, double ** centroids, options_t &args){
@@ -101,13 +108,6 @@ double ** average_labeled_centroids(double ** dataset, int * labels, int cluster
       centroids[i][j] /= points_in_centroid[i];
     }
   }
-
-  //print the points in each centroid
-  printf("Points in Centroid\n");
-  for (int i =0; i< args.num_cluster; i++){
-    printf("%d:%d ", i, points_in_centroid[i] );
-  }
-  printf("\n");
 
   free(points_in_centroid);
   return centroids;

@@ -35,6 +35,8 @@ int main(int argc, char **argv)
             printf(" %d", opts.labels[p]);
         }
     } else {
+        if (!opts.use_cpu) {
+
         // TODO : Wont work for CPU because CPU is still 2D
         for (int clusterId = 0; clusterId < opts.num_cluster; clusterId ++){
             printf("%d ", clusterId);
@@ -43,10 +45,11 @@ int main(int argc, char **argv)
             }
             printf("\n");
         }
+        }
     }
     //End timer and print out elapsed
     auto end = std::chrono::high_resolution_clock::now();
-    auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    std::chrono::microseconds diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     std::cout << "time: " << diff.count() << " us" <<std::endl;
     free_input_points(vals, opts.number_of_values);
 }

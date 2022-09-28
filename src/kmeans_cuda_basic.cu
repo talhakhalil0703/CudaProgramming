@@ -3,6 +3,7 @@
 #include "io.h"
 // #include <cmath>
 #include <limits>
+#include <chrono>
 #include <math.h>
 
 void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
@@ -41,8 +42,12 @@ void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
     }
   }
 
+  double duration_total = 0;
+
   while(!done){
     //copy
+    auto start = std::chrono::high_resolution_clock::now();
+
     old_centroids = cuda_copy(centroids, args);
 
     iterations++;
@@ -59,11 +64,15 @@ void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
     centroids = cuda_average_labeled_centroids(dataset, labels, args);
 
     done = iterations > args.max_num_iter || cuda_converged(centroids, old_centroids, args);
-
+    auto end = std::chrono::high_resolution_clock::now();
+    int duration = std::chrono::duration_cast<std::chrono::milliseconds>( end - start ).count();
+    duration_total += duration;
     free(old_centroids);
     // free labels, only if not done
     if (!done) free (labels);
   }
+
+  printf("%d,%lf\n", iterations, duration_total/iterations);
 
   args.labels = labels;
   args.centroids = centroids;

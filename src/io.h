@@ -6,4 +6,5 @@ void read_file(struct options_t* args,
 
 void free_input_points(double ** input, int number_of_values);
 
+void print_points(double * input, int number_of_values, int dimensions);
 void print_points(double ** input, int number_of_values, int dimensions);

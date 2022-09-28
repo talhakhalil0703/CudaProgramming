@@ -5,26 +5,45 @@
 #include <limits>
 #include <math.h>
 
-void kmeans_cuda_basic(double **dataset, int clusters, options_t &args) {
-
-  // TODO:  Convert dataset to singular dimension here? Or Should we do this above
+void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
 
   // TODO: Do random assigning of centroids in the main function or helper somewhere else?
-  double **centroids = (double **)malloc(args.num_cluster * sizeof(double *));
+  double **d_centroids = (double **)malloc(args.num_cluster * sizeof(double *));
   int index = 0;
   for (int i = 0; i < args.num_cluster; i++){
     index = kmeans_rand() % args.number_of_values;
-    centroids[i] = dataset[index];
+    d_centroids[i] = d_dataset[index];
   }
+
   // print_points(centroids, args.num_cluster ,args.dims);
   int iterations = 0;
-  double ** old_centroids = NULL;
+  double * old_centroids = NULL;
   bool done = false;
   int * labels;
 
+
+  //Conversion to 1D arrays
+
+  double * dataset = (double *) malloc (args.number_of_values * args.dims * sizeof(double));
+  double * centroids = (double *) malloc (args.num_cluster * args.dims * sizeof(double));
+
+  index = 0;
+  for (int i = 0; i< args.number_of_values; i++){
+    for (int j =0; j < args.dims; j++){
+      dataset[index++] = d_dataset[i][j];
+    }
+  }
+
+  index = 0;
+  for (int i = 0; i< args.num_cluster; i++){
+    for (int j =0; j < args.dims; j++){
+      centroids[index++] = d_centroids[i][j];
+    }
+  }
+
   while(!done){
     //copy
-    old_centroids = cuda_copy_double(centroids, args);
+    old_centroids = cuda_copy(centroids, args);
 
     iterations++;
 
@@ -40,13 +59,8 @@ void kmeans_cuda_basic(double **dataset, int clusters, options_t &args) {
     centroids = cuda_average_labeled_centroids(dataset, labels, args);
 
     done = iterations > args.max_num_iter || cuda_converged(centroids, old_centroids, args);
-    // free old_centroids
-    // TODO: Write a freeing function
-    for(int i =0; i < args.num_cluster; i++){
-      free(old_centroids[i]);
-    }
-    free(old_centroids);
 
+    free(old_centroids);
     // free labels, only if not done
     free (labels);
     printf("Iterations : %d\n", iterations);
@@ -56,26 +70,9 @@ void kmeans_cuda_basic(double **dataset, int clusters, options_t &args) {
   print_points(centroids, args.num_cluster, args.dims);
 }
 
-int * cuda_find_nearest_centroids(double ** dataset, double ** centroids, options_t &args){
-  // TODO: This conversion should be done before somewhere else?
+int * cuda_find_nearest_centroids(double * h_dataset, double * h_centroids, options_t &args){
 
-  double * h_dataset = (double *)malloc(args.dims * args.number_of_values * sizeof(double));
-  double * h_centroids = (double *)malloc(args.dims * args.num_cluster * sizeof(double));
   int * h_labels = (int *)malloc(args.number_of_values * sizeof(int));
-
-  int index =0;
-  for (int i = 0; i < args.number_of_values; i++){
-    for (int j = 0; j < args.dims; j++){
-      h_dataset[index++] = dataset[i][j];
-    }
-  }
-
-  index = 0;
-  for (int i = 0; i < args.num_cluster; i++){
-    for (int j = 0; j < args.dims; j++){
-      h_centroids[index++] = centroids[i][j];
-    }
-  }
 
   //Allocate Device Memory
   double * d_dataset;
@@ -106,11 +103,6 @@ int * cuda_find_nearest_centroids(double ** dataset, double ** centroids, option
   cudaFree(d_centroids);
   cudaFree(d_intermediate_values);
   cudaFree(d_labels);
-
-  //Free Host Memory
-  free(h_dataset);
-  free(h_centroids);
-
 
   return h_labels;
 }
@@ -161,17 +153,9 @@ __global__ void d_cuda_find_nearest_centroids(double * dataset, double * centroi
     labels[blockIdx.x] = id_short;
   }
 }
-double ** cuda_average_labeled_centroids(double ** dataset, int * h_labels, options_t &args){
+double * cuda_average_labeled_centroids(double * h_dataset, int * h_labels, options_t &args){
   // First turn the dataset into a singular dimension
-  double * h_dataset = (double *)malloc(args.number_of_values * args.dims * sizeof(double));
   double * h_centroids = (double *)malloc(args.num_cluster * args.dims * sizeof(double));
-
-  int index = 0;
-  for (int i = 0; i< args.number_of_values; i++) {
-    for (int j =0; j < args.dims; j++){
-      h_dataset[index++] = dataset[i][j];
-    }
-  }
 
   // Allocate Device Memory
   double * d_dataset;
@@ -197,28 +181,8 @@ double ** cuda_average_labeled_centroids(double ** dataset, int * h_labels, opti
   cudaFree(d_dataset);
   cudaFree(d_labels);
   cudaFree(d_centroids);
-  // Convert the singular array into a double array
 
-  // TODO This should be converted into a singular array, will remove a lot of operations
-  double ** centroids = (double **) malloc(args.num_cluster * sizeof(double *));
-  for (int i =0; i < args.num_cluster; i++){
-    double * centroids_inner = (double *) malloc(args.dims * sizeof(double));
-    centroids[i] = centroids_inner;
-  }
-
-  index = 0;
-  for (int i=0; i < args.num_cluster; i++){
-    for (int j =0; j< args.dims; j++){
-      centroids[i][j] = h_centroids[index++];
-    }
-  }
-
-  // Free Host Memory
-  free(h_centroids);
-  free(h_dataset);
-  // Return the double array
-  return centroids;
-
+  return h_centroids;
 }
 
 __global__ void d_cuda_average_labeled_centroids(double * d_dataset, int * d_labels, double * centroids, int number_of_values){
@@ -243,25 +207,9 @@ __global__ void d_cuda_average_labeled_centroids(double * d_dataset, int * d_lab
 }
 
 
-bool cuda_converged(double ** new_centroids, double** old_centroids, options_t &args) {
+bool cuda_converged(double * h_new_centroids, double* h_old_centroids, options_t &args) {
 
-
-  // TODO Does data structure have to be rethought here so we don't do this conversion each time?
-  // Make array singular dimension
-
-  double * h_new_centroids = (double *)malloc(args.dims * args.num_cluster * sizeof(double));
-  double * h_old_centroids = (double *)malloc(args.dims * args.num_cluster * sizeof(double));
   bool * h_convergence = (bool *)malloc(args.num_cluster * sizeof(double));
-
-  int index =0;
-
-  for (int i = 0; i < args.num_cluster; i++){
-    for (int j =0; j < args.dims; j++){
-      h_new_centroids[index] = new_centroids[i][j];
-      h_old_centroids[index] = old_centroids[i][j];
-      index++;
-    }
-  }
 
   //Allocate Device Memory
   double * d_new_centroids;
@@ -302,8 +250,6 @@ bool cuda_converged(double ** new_centroids, double** old_centroids, options_t &
   cudaFree(d_convergence);
 
   // Free Host Memory
-  free(h_new_centroids);
-  free(h_old_centroids);
   free(h_convergence);
 
   // Check if each of the centroid has moved less than the threshold provided.
@@ -399,18 +345,13 @@ __global__ void d_eucledian_distance_helper(double * first, double * second, dou
 }
 
 
-double ** cuda_copy_double(double ** original, options_t args)
+double * cuda_copy(double * original, options_t args)
 {
-  double ** copy = (double **) malloc(args.num_cluster * sizeof(double*));
-  for (int i = 0; i < args.num_cluster; i++){
-    double * inner = (double *) malloc (args.dims * sizeof(double));
-    copy[i] = inner;
+  double * copy = (double *) malloc(args.num_cluster * args.dims * sizeof(double));
+
+  for (int i =0; i < args.num_cluster * args.dims; i++){
+    copy[i] = original[i];
   }
 
-  for (int i =0; i < args.num_cluster; i++){
-    for (int j = 0; j< args.dims; j++){
-      copy[i][j] = original[i][j];
-    }
-  }
   return copy;
 }

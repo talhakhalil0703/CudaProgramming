@@ -54,3 +54,14 @@ void print_points(double ** input, int number_of_values, int dimensions){
         std::cout << std::endl;
     }
 }
+
+void print_points(double * input, int number_of_values, int dimensions){
+    std::cout << std::setprecision(5) << std::fixed;
+    for (int i =0; i < number_of_values; i++) {
+        std::cout << i;
+        for (int j =0; j < dimensions; j++){
+            std::cout << " " << input[i*dimensions + j];
+        }
+        std::cout << std::endl;
+    }
+}

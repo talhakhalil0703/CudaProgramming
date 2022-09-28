@@ -7,7 +7,9 @@
 
 void kmeans_cuda_basic(double **dataset, int clusters, options_t &args) {
 
-// Random assign Centroids
+  // TODO:  Convert dataset to singular dimension here? Or Should we do this above
+
+  // TODO: Do random assigning of centroids in the main function or helper somewhere else?
   double **centroids = (double **)malloc(args.num_cluster * sizeof(double *));
   int index = 0;
   for (int i = 0; i < args.num_cluster; i++){
@@ -35,7 +37,7 @@ void kmeans_cuda_basic(double **dataset, int clusters, options_t &args) {
     // }
 
     //the new centroids are the average of all points that map to each centroid
-    centroids = cuda_average_labeled_centroids(dataset, labels, clusters, args);
+    centroids = cuda_average_labeled_centroids(dataset, labels, args);
 
     done = iterations > args.max_num_iter || cuda_converged(centroids, old_centroids, args);
     // free old_centroids
@@ -159,45 +161,87 @@ __global__ void d_cuda_find_nearest_centroids(double * dataset, double * centroi
     labels[blockIdx.x] = id_short;
   }
 }
+double ** cuda_average_labeled_centroids(double ** dataset, int * h_labels, options_t &args){
+  // First turn the dataset into a singular dimension
+  double * h_dataset = (double *)malloc(args.number_of_values * args.dims * sizeof(double));
+  double * h_centroids = (double *)malloc(args.num_cluster * args.dims * sizeof(double));
 
-double ** cuda_average_labeled_centroids(double ** dataset, int * labels, int clusters, options_t &args){
-  // For a new center given points. Here we need to know how to calculate a centroid.
-  double ** centroids = (double **) calloc(args.num_cluster, sizeof(double *));
-  int * points_in_centroid = (int *) calloc(args.num_cluster, sizeof(int));
+  int index = 0;
+  for (int i = 0; i< args.number_of_values; i++) {
+    for (int j =0; j < args.dims; j++){
+      h_dataset[index++] = dataset[i][j];
+    }
+  }
 
-  //For each centroid set the starting point to be zero for each dimensional value
+  // Allocate Device Memory
+  double * d_dataset;
+  int * d_labels;
+  double * d_centroids;
+  cudaMalloc((void**)&d_dataset, args.number_of_values * args.dims * sizeof(double));
+  cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
+  cudaMalloc((void**)&d_centroids, args.num_cluster * args.dims * sizeof(double));
+
+  // Transfer Memory From Host To Device
+  cudaMemcpy(d_dataset, h_dataset, args.number_of_values * args.dims * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_labels, h_labels, args.number_of_values * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_centroids, 0, args.num_cluster * args.dims * sizeof(double), cudaMemcpyHostToDevice); // Should start from zero?
+
+  // Launch the kernel
+  d_cuda_average_labeled_centroids<<<dim3(args.num_cluster), dim3(args.dims)>>>(d_dataset, d_labels, d_centroids, args.number_of_values);
+
+  // Sync
+  cudaDeviceSynchronize();
+  // Copy Memory back from Device to Host
+  cudaMemcpy(h_centroids, d_centroids, args.num_cluster * args.dims * sizeof(double), cudaMemcpyDeviceToHost);
+  // Free Device Memory
+  cudaFree(d_dataset);
+  cudaFree(d_labels);
+  cudaFree(d_centroids);
+  // Convert the singular array into a double array
+
+  // TODO This should be converted into a singular array, will remove a lot of operations
+  double ** centroids = (double **) malloc(args.num_cluster * sizeof(double *));
   for (int i =0; i < args.num_cluster; i++){
-    double * centroid = (double *) calloc (args.dims, sizeof(double));
-    centroids[i] = centroid;
+    double * centroids_inner = (double *) malloc(args.dims * sizeof(double));
+    centroids[i] = centroids_inner;
   }
 
-  // For a given centroid define a keep track of all the values associated with that dimension and add them
-  // Sum the corresponding points, we also need to know how many points are in each cluster..
-  for (int i = 0; i < args.number_of_values; i++){
-    int index_of_centroid = labels[i];
-    points_in_centroid[index_of_centroid]++;
-    for (int j =0 ; j < args.dims; j++){
-      centroids[index_of_centroid][j] += dataset[i][j];
+  index = 0;
+  for (int i=0; i < args.num_cluster; i++){
+    for (int j =0; j< args.dims; j++){
+      centroids[i][j] = h_centroids[index++];
     }
   }
 
-  // At the end divide by the total number of elements for each dimension
-  for(int i = 0; i < args.num_cluster; i++){
-    for (int j = 0; j < args.dims; j++){
-      centroids[i][j] /= points_in_centroid[i];
-    }
-  }
-
-  //print the points in each centroid
-  printf("Points in Centroid\n");
-  for (int i =0; i< args.num_cluster; i++){
-    printf("%d:%d ", i, points_in_centroid[i] );
-  }
-  printf("\n");
-
-  free(points_in_centroid);
+  // Free Host Memory
+  free(h_centroids);
+  free(h_dataset);
+  // Return the double array
   return centroids;
+
 }
+
+__global__ void d_cuda_average_labeled_centroids(double * d_dataset, int * d_labels, double * centroids, int number_of_values){
+  // Dimensions is blockDim.x
+  // A block here manages the centroid Id
+  // A thread here manages the addition it needs to do for that dimension
+  int points = 0;
+  // First loop through  d_dataset skipping dim[blockDim.x] times, and check if the value here is equal to our block id
+  for (int i = 0; i < number_of_values; i ++) {
+    if (d_labels[i] == blockIdx.x) {
+      points++;
+      centroids[blockIdx.x * blockDim.x + threadIdx.x] += d_dataset[i * blockDim.x + threadIdx.x];
+    }
+  }
+
+  if (points != 0){
+    centroids[blockIdx.x * blockDim.x + threadIdx.x] /= points;
+  }
+
+  //Once you have done the addition for all
+
+}
+
 
 bool cuda_converged(double ** new_centroids, double** old_centroids, options_t &args) {
 

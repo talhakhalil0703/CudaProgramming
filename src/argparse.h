@@ -18,6 +18,8 @@ struct options_t {
     bool use_cuda_basic;
     bool use_thrust;
     int number_of_values;
+    int * labels;
+    double * centroids;
 };
 
 void get_opts(int argc, char **argv, struct options_t *opts);

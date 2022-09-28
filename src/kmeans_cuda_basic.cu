@@ -62,12 +62,11 @@ void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
 
     free(old_centroids);
     // free labels, only if not done
-    free (labels);
-    printf("Iterations : %d\n", iterations);
-    // print_points(centroids, args.num_cluster, args.dims);
+    if (!done) free (labels);
   }
 
-  print_points(centroids, args.num_cluster, args.dims);
+  args.labels = labels;
+  args.centroids = centroids;
 }
 
 int * cuda_find_nearest_centroids(double * h_dataset, double * h_centroids, options_t &args){

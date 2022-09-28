@@ -45,11 +45,12 @@ void kmeans_cpu(double **dataset, int clusters, options_t &args) {
     free(old_centroids);
 
     // free labels, only if not done
-    free (labels);
+    if (!done) free (labels);
     printf("Iterations : %d\n", iterations);
     // print_points(centroids, args.num_cluster, args.dims);
   }
-
+  args.labels = labels;
+  // TODO: Convert centroids to singular and attach here as well to args
   print_points(centroids, args.num_cluster, args.dims);
 }
 

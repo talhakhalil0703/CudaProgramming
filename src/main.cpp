@@ -28,6 +28,22 @@ int main(int argc, char **argv)
         std::cout << "Using CUDA Basic: " << std::endl;
         kmeans_cuda_basic(vals, opts.num_cluster, opts);
     }
+
+    if (opts.c){
+        printf("clusters:");
+        for (int p=0; p < opts.number_of_values; p++) {
+            printf(" %d", opts.labels[p]);
+        }
+    } else {
+        // TODO : Wont work for CPU because CPU is still 2D
+        for (int clusterId = 0; clusterId < opts.num_cluster; clusterId ++){
+            printf("%d ", clusterId);
+            for (int d = 0; d < opts.dims; d++){
+                printf("%0.5lf ", opts.centroids[clusterId*opts.dims  + d ]);
+            }
+            printf("\n");
+        }
+    }
     //End timer and print out elapsed
     auto end = std::chrono::high_resolution_clock::now();
     auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);

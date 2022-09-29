@@ -18,4 +18,4 @@ debug:
 	nvcc $(SRCS) $(SRCSS) -g -I$(INC) -o $(EXEC)_debug
 
 test:
-	python tester.py
+	python3 tester.py

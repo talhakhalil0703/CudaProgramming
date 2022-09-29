@@ -24,7 +24,7 @@ def main():
             timing = 0
             for run in range(0, RUNS):
                 command_to_run = f"{EXEC} -k 16 -d {dims} -i {input} -m {ITERATION_LIMIT} -t {CONVERGENCE_THRESHOLD} -s {SEED} {method}"
-                p = subprocess.run([command_to_run], shell=True, capture_output=True, text=True)
+                p = subprocess.getoutput([command_to_run])
                 match = True
                 cluster = []
                 with open(f"{answer}", "r") as f:
@@ -36,7 +36,7 @@ def main():
                             dim.append(float(dimension))
                         cluster.append(dim)
 
-                for p_id, point in enumerate(p.stdout.splitlines()):
+                for p_id, point in enumerate(p.splitlines()):
                     if p_id == 0:
                         timing += float(point.split(',')[1])
                         continue # first line is timing information

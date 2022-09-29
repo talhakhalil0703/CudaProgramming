@@ -5,6 +5,7 @@
 #include "random.h"
 #include "io.h"
 #include "kmeans_cuda_basic.h"
+#include "kmeans_cuda_shared.h"
 #include "kmeans_cpu.h"
 
 using namespace std;
@@ -19,8 +20,11 @@ int main(int argc, char **argv)
     kmeans_set_rand_seed(opts.seed);
     double ** vals;
     read_file(&opts, &vals, &vals);
+    // TODO remove otps.num_cluster its not needed as an argument
     if (opts.use_cpu){
         kmeans_cpu(vals, opts.num_cluster, opts);
+    } else if (opts.use_cuda_shared){
+        kmeans_cuda_shared(vals, opts.num_cluster, opts);
     } else if (opts.use_cuda_basic){
         kmeans_cuda_basic(vals, opts.num_cluster, opts);
     }

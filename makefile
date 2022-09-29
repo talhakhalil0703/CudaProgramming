@@ -6,19 +6,16 @@ OPTS = -std=c++17 -Wall -Werror
 
 EXEC = bin/kmeans
 
-all: clean compile
-
-compile:
-	$(CC) $(SRCS) $(OPTS) -O3 -I$(INC) -o $(EXEC)
-
-debug:
-	$(CC) $(SRCS) $(OPTS) -g -I$(INC) -o $(EXEC)_debug
+all: clean compile test
 
 clean:
 	rm -f $(EXEC)
 
-cuda:
-	nvcc $(SRCS) $(SRCSS) -O3 -I$(INC) -o $(EXEC)_cuda
+compile:
+	nvcc $(SRCS) $(SRCSS) -O3 -I$(INC) -o $(EXEC)
 
-cuda_debug:
-	nvcc $(SRCS) $(SRCSS) -g -I$(INC) -o $(EXEC)_cuda_debug
+debug:
+	nvcc $(SRCS) $(SRCSS) -g -I$(INC) -o $(EXEC)_debug
+
+test:
+	python tester.py

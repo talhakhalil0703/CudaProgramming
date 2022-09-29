@@ -7,7 +7,7 @@ ITERATION_LIMIT = 150
 CONVERGENCE_THRESHOLD = 0.000001
 SEED = 8675309
 GRADER_THRESHOLD = 0.0000100000001 # floating point errors
-EXEC = "./bin/kmeans_cuda "
+EXEC = "./bin/kmeans"
 
 METHODS = ["--use_cuda_basic"]
 
@@ -35,6 +35,7 @@ def main():
 
             for p_id, point in enumerate(p.stdout.splitlines()):
                 if p_id == 0:
+                    timing = point.split(',')[1]
                     continue # first line is timing information
                 for d_id, dimension in enumerate(point.split(" ")): # First number is index, we can skip, subsequent DIMS numbers
                     if d_id == 0 or d_id==dims+1: continue # Random space at end so we skip that as well
@@ -43,6 +44,8 @@ def main():
                         match = False
             if not match:
                 print(f"{input} does not match for {method}")
+            else:
+                print(f"{command_to_run} : {timing} ms")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,28 @@
 #include <chrono>
 #include <math.h>
 
+#if __CUDA_ARCH__ < 600
+// The following code is provided in the CUDA toolkit documentation
+// https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#atomic-functions
+__device__ double atomicAdd_d(double* address, double val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        __double_as_longlong(val +
+                               __longlong_as_double(assumed)));
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+#endif
+
 void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
 
   // TODO: Do random assigning of centroids in the main function or helper somewhere else?
@@ -252,7 +274,7 @@ bool cuda_converged(double * h_new_centroids, double* h_old_centroids, options_t
 
   cudaMalloc((void**)&d_new_centroids, args.dims*args.num_cluster*sizeof(double));
   cudaMalloc((void**)&d_old_centroids, args.dims*args.num_cluster*sizeof(double));
-  cudaMalloc((void**)&d_intermediate_values, args.dims*args.num_cluster*sizeof(double));
+  cudaMalloc((void**)&d_intermediate_values, args.num_cluster*sizeof(double));
   cudaMalloc((void**)&d_convergence, args.num_cluster*sizeof(bool));
 
   // Transfer Memory from Host to Device
@@ -297,19 +319,15 @@ __global__ void d_cuda_convergence_helper(double * new_c, double * old_c, double
   int index = threadIdx.x + blockIdx.x * blockDim.x;
 
   if (threadIdx.x < dimensions){
-    temp[index] = powf( new_c[index] - old_c[index], 2.0);
+    atomicAdd_d(&temp[blockIdx.x], (double)powf( new_c[index] - old_c[index], 2.0));
   }
+
   __syncthreads();
 
+  // It looks like here maybe we could make use of __atomic_add, would that make a speedup? Not noticeable enough
+
   if (threadIdx.x == 0) {
-    double distance = 0;
-    for (int j =0; j < dimensions; j++){
-      distance += temp[blockIdx.x * blockDim.x + j];
-    }
-
-    distance = sqrtf(distance);
-
-    if (threshold < distance){
+    if (threshold < sqrtf(temp[blockIdx.x])){
       convergence[blockIdx.x] = false;
     } else {
       convergence[blockIdx.x] = true;

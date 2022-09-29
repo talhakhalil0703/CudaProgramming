@@ -43,17 +43,18 @@ void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
   }
 
   double duration_total = 0;
+  double duration = 0;
 
   while(!done){
     //copy
-    auto start = std::chrono::high_resolution_clock::now();
+    duration = 0;
 
     old_centroids = cuda_copy(centroids, args);
 
     iterations++;
 
     //labels is a mapping from each point in the dataset to the enarest euclidian distance centroid
-    labels = cuda_find_nearest_centroids(dataset, centroids, args);
+    labels = cuda_find_nearest_centroids(dataset, centroids, args, &duration);
 
     // Print Labels
     // for (int i =0 ; i< args.number_of_values; i++){
@@ -61,11 +62,10 @@ void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
     // }
 
     //the new centroids are the average of all points that map to each centroid
-    centroids = cuda_average_labeled_centroids(dataset, labels, args);
+    centroids = cuda_average_labeled_centroids(dataset, labels, args, &duration);
 
-    done = iterations > args.max_num_iter || cuda_converged(centroids, old_centroids, args);
-    auto end = std::chrono::high_resolution_clock::now();
-    int duration = std::chrono::duration_cast<std::chrono::milliseconds>( end - start ).count();
+    done = iterations > args.max_num_iter || cuda_converged(centroids, old_centroids, args, &duration);
+
     duration_total += duration;
     free(old_centroids);
     // free labels, only if not done
@@ -78,7 +78,11 @@ void kmeans_cuda_basic(double **d_dataset, int clusters, options_t &args) {
   args.centroids = centroids;
 }
 
-int * cuda_find_nearest_centroids(double * h_dataset, double * h_centroids, options_t &args){
+int * cuda_find_nearest_centroids(double * h_dataset, double * h_centroids, options_t &args, double * duration){
+  //Timing
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
 
   int * h_labels = (int *)malloc(args.number_of_values * sizeof(int));
 
@@ -98,7 +102,13 @@ int * cuda_find_nearest_centroids(double * h_dataset, double * h_centroids, opti
   cudaMemcpy(d_centroids, h_centroids, args.dims*args.num_cluster*sizeof(double), cudaMemcpyHostToDevice);
 
   //Launch the kernel
+  cudaEventRecord(start);
   d_cuda_find_nearest_centroids<<<dim3(args.number_of_values), dim3(args.num_cluster)>>>(d_dataset, d_centroids, d_intermediate_values, d_labels, args.dims, std::numeric_limits<double>::max());
+  cudaEventRecord(stop);
+
+  float ms = 0;
+  cudaEventElapsedTime(&ms, start, stop);
+  *duration += ms;
 
   //Sync
   cudaDeviceSynchronize();
@@ -161,7 +171,12 @@ __global__ void d_cuda_find_nearest_centroids(double * dataset, double * centroi
     labels[blockIdx.x] = id_short;
   }
 }
-double * cuda_average_labeled_centroids(double * h_dataset, int * h_labels, options_t &args){
+double * cuda_average_labeled_centroids(double * h_dataset, int * h_labels, options_t &args, double * duration){
+  //Timing
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+
   // First turn the dataset into a singular dimension
   double * h_centroids = (double *)malloc(args.num_cluster * args.dims * sizeof(double));
 
@@ -179,7 +194,9 @@ double * cuda_average_labeled_centroids(double * h_dataset, int * h_labels, opti
   cudaMemcpy(d_centroids, 0, args.num_cluster * args.dims * sizeof(double), cudaMemcpyHostToDevice); // Should start from zero?
 
   // Launch the kernel
+  cudaEventRecord(start);
   d_cuda_average_labeled_centroids<<<dim3(args.num_cluster), dim3(args.dims)>>>(d_dataset, d_labels, d_centroids, args.number_of_values);
+  cudaEventRecord(stop);
 
   // Sync
   cudaDeviceSynchronize();
@@ -190,6 +207,9 @@ double * cuda_average_labeled_centroids(double * h_dataset, int * h_labels, opti
   cudaFree(d_labels);
   cudaFree(d_centroids);
 
+  float ms = 0;
+  cudaEventElapsedTime(&ms, start, stop);
+  *duration += ms;
   return h_centroids;
 }
 
@@ -215,7 +235,12 @@ __global__ void d_cuda_average_labeled_centroids(double * d_dataset, int * d_lab
 }
 
 
-bool cuda_converged(double * h_new_centroids, double* h_old_centroids, options_t &args) {
+bool cuda_converged(double * h_new_centroids, double* h_old_centroids, options_t &args, double * duration) {
+
+  //Timing
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
 
   bool * h_convergence = (bool *)malloc(args.num_cluster * sizeof(double));
 
@@ -234,7 +259,9 @@ bool cuda_converged(double * h_new_centroids, double* h_old_centroids, options_t
   cudaMemcpy(d_new_centroids, h_new_centroids, args.dims*args.num_cluster*sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(d_old_centroids, h_old_centroids, args.dims*args.num_cluster*sizeof(double), cudaMemcpyHostToDevice);
 
+  cudaEventRecord(start);
   d_cuda_convergence_helper<<<dim3(args.num_cluster), dim3(args.dims)>>>(d_new_centroids, d_old_centroids, d_intermediate_values, d_convergence, args.threshold, args.dims);
+  cudaEventRecord(stop);
 
   //Sync
   cudaDeviceSynchronize();
@@ -259,7 +286,9 @@ bool cuda_converged(double * h_new_centroids, double* h_old_centroids, options_t
 
   // Free Host Memory
   free(h_convergence);
-
+  float ms = 0;
+  cudaEventElapsedTime(&ms, start, stop);
+  *duration += ms;
   // Check if each of the centroid has moved less than the threshold provided.
   return converged;
 }
@@ -287,71 +316,6 @@ __global__ void d_cuda_convergence_helper(double * new_c, double * old_c, double
     }
   }
 }
-
-
-double cuda_eucledian_distance(double * h_first, double * h_second, int h_dimensions){
-  double sum = 0;
-
-  // Allocate arrays in Host Memory
-  double * h_sum = (double *)malloc(sizeof(double));
-
-  // Allocate arrays in Device Memory
-  double * d_first;
-  double * d_second;
-  double * d_return;
-  double * d_sum;
-
-  cudaMalloc((void**)&d_first, h_dimensions* sizeof(double));
-  cudaMalloc((void**)&d_second, h_dimensions* sizeof(double));
-  cudaMalloc((void**)&d_return, h_dimensions* sizeof(double));
-  cudaMalloc((void**)&d_sum, sizeof(double));
-
-
-  // Copy memory from Host to Device
-  // Where to, From, How many, Direction
-  cudaMemcpy(d_first, h_first, h_dimensions*sizeof(double), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_second, h_second, h_dimensions*sizeof(double), cudaMemcpyHostToDevice);
-
-  // Launch Kernel
-  d_eucledian_distance_helper<<<dim3(1), dim3(h_dimensions)>>> (d_first, d_second, d_return, d_sum, h_dimensions);
-
-  cudaDeviceSynchronize();
-
-  cudaMemcpy(h_sum, d_sum, sizeof(double), cudaMemcpyDeviceToHost);
-
-  // Clear Device Memory and Host return Memory
-  cudaFree(d_first);
-  cudaFree(d_second);
-  cudaFree(d_return);
-  cudaFree(d_sum);
-
-  sum = *h_sum;
-
-  free(h_sum);
-
-  return sum;
-}
-
-__global__ void d_eucledian_distance_helper(double * first, double * second, double * pow, double * ret, int dim){
-
-  int i = threadIdx.x;
-
-  if (i < dim){
-    pow[i] = powf( (double) first[i] - second[i], (double)2.0);
-  }
-  __syncthreads();
-
-  if (i == 0){
-    double sum =0;
-    for (int j = 0; j < dim; j++){
-      sum += pow[i];
-    }
-
-    *ret = sqrtf(sum);
-  }
-
-}
-
 
 double * cuda_copy(double * original, options_t args)
 {

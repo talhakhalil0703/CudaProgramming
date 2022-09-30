@@ -6,24 +6,6 @@
 #include <chrono>
 #include <math.h>
 
-#if __CUDA_ARCH__ < 600
-// The following code is provided in the CUDA toolkit documentation
-// https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#atomic-functions
-__device__ double shared_atomicAdd_d(double* address, double val)
-{
-    unsigned long long int* address_as_ull = (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
-
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val + __longlong_as_double(assumed)));
-
-    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
-    } while (assumed != old);
-
-    return __longlong_as_double(old);
-}
-
 __device__ double shared_atomicMin_d(double* address, double val)
 {
     unsigned long long int* address_as_ull = (unsigned long long int*)address;
@@ -37,7 +19,6 @@ __device__ double shared_atomicMin_d(double* address, double val)
 
     return __longlong_as_double(old);
 }
-#endif
 
 void kmeans_cuda_shared(double * dataset, double * centroids, options_t &args) {
 
@@ -279,7 +260,7 @@ __global__ void d_cuda_shared_convergence_helper(double * new_c, double * old_c,
   distance = 0;
 
   if (threadIdx.x < dimensions){
-    shared_atomicAdd_d(&distance, (double)powf( new_c[index] - old_c[index], 2.0));
+    atomicAdd(&distance, (double)powf( new_c[index] - old_c[index], 2.0));
   }
 
   __syncthreads();

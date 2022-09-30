@@ -6,27 +6,6 @@
 #include <chrono>
 #include <math.h>
 
-#if __CUDA_ARCH__ < 600
-// The following code is provided in the CUDA toolkit documentation
-// https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#atomic-functions
-__device__ double atomicAdd_d(double* address, double val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
-
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        __double_as_longlong(val +
-                               __longlong_as_double(assumed)));
-
-    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
-    } while (assumed != old);
-
-    return __longlong_as_double(old);
-}
-#endif
 
 void kmeans_cuda_basic(double *dataset, double * centroids, options_t &args) {
   int iterations = 0;
@@ -288,7 +267,7 @@ __global__ void d_cuda_convergence_helper(double * new_c, double * old_c, double
   int index = threadIdx.x + blockIdx.x * blockDim.x;
 
   if (threadIdx.x < dimensions){
-    atomicAdd_d(&temp[blockIdx.x], (double)powf( new_c[index] - old_c[index], 2.0));
+    atomicAdd(&temp[blockIdx.x], (double)powf( new_c[index] - old_c[index], 2.0));
   }
 
   __syncthreads();

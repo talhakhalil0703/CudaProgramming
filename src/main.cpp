@@ -35,16 +35,12 @@ int main(int argc, char **argv)
             printf(" %d", opts.labels[p]);
         }
     } else {
-        if (!opts.use_cpu) {
-
-        // TODO : Wont work for CPU because CPU is still 2D
         for (int clusterId = 0; clusterId < opts.num_cluster; clusterId ++){
             printf("%d ", clusterId);
             for (int d = 0; d < opts.dims; d++){
                 printf("%0.5lf ", opts.centroids[clusterId*opts.dims  + d ]);
             }
             printf("\n");
-        }
         }
     }
     free_input_points(vals, opts.number_of_values);

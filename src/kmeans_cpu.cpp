@@ -5,18 +5,37 @@
 #include <limits>
 #include <chrono>
 
-void kmeans_cpu(double **dataset, int clusters, options_t &args) {
+void kmeans_cpu(double **d_dataset, int clusters, options_t &args) {
 
 // Random assign Centroids
-  double **centroids = (double **)malloc(args.num_cluster * sizeof(double *));
+  double **d_centroids = (double **)malloc(args.num_cluster * sizeof(double *));
   int index = 0;
   for (int i = 0; i < args.num_cluster; i++){
     index = kmeans_rand() % args.number_of_values;
-    centroids[i] = dataset[index];
+    d_centroids[i] = d_dataset[index];
   }
+  //Conversion to 1D arrays
+
+  double * dataset = (double *) malloc (args.number_of_values * args.dims * sizeof(double));
+  double * centroids = (double *) malloc (args.num_cluster * args.dims * sizeof(double));
+
+  index = 0;
+  for (int i = 0; i< args.number_of_values; i++){
+    for (int j =0; j < args.dims; j++){
+      dataset[index++] = d_dataset[i][j];
+    }
+  }
+
+  index = 0;
+  for (int i = 0; i< args.num_cluster; i++){
+    for (int j =0; j < args.dims; j++){
+      centroids[index++] = d_centroids[i][j];
+    }
+  }
+
   // print_points(centroids, args.num_cluster ,args.dims);
   int iterations = 0;
-  double ** old_centroids = NULL;
+  double * old_centroids = NULL;
   bool done = false;
   int * labels;
   double duration_total = 0;
@@ -25,14 +44,14 @@ void kmeans_cpu(double **dataset, int clusters, options_t &args) {
     //copy
     auto start = std::chrono::high_resolution_clock::now();
 
-    old_centroids = copy_double(centroids, args);
+    old_centroids = seq_copy(centroids, args);
 
     iterations++;
 
     //labels is a mapping from each point in the dataset to the enarest euclidian distance centroid
     labels = find_nearest_centroids(dataset, centroids, args);
 
-    // Print Labels
+    //Print Labels
     // for (int i =0 ; i< args.number_of_values; i++){
     //   std::cout << i << ": " << labels[i] << std::endl;
     // }
@@ -41,11 +60,8 @@ void kmeans_cpu(double **dataset, int clusters, options_t &args) {
     centroids = average_labeled_centroids(dataset, labels, clusters, args);
 
     done = iterations > args.max_num_iter || converged(centroids, old_centroids, args);
+
     // free old_centroids
-    // TODO: Write a freeing function
-    for(int i =0; i < args.num_cluster; i++){
-      free(old_centroids[i]);
-    }
     free(old_centroids);
 
     // free labels, only if not done
@@ -55,13 +71,11 @@ void kmeans_cpu(double **dataset, int clusters, options_t &args) {
     if (!done) free (labels);
   }
   args.labels = labels;
+  args.centroids = centroids;
   printf("%d,%lf\n", iterations, duration_total/iterations);
-
-  // TODO: Convert centroids to singular and attach here as well to args
-  // print_points(centroids, args.num_cluster, args.dims);
 }
 
-int * find_nearest_centroids(double ** dataset, double ** centroids, options_t &args){
+int * find_nearest_centroids(double * dataset, double * centroids, options_t &args){
   // For each point we calculate the distance from that point to all centroids, and then store the closest point as the index of the centroid
   // The length of labels here would be the number of points we have...
   int * labels = (int *) calloc (args.number_of_values, sizeof(int));
@@ -69,28 +83,25 @@ int * find_nearest_centroids(double ** dataset, double ** centroids, options_t &
 
   for (int i =0; i < args.number_of_values; i++){
     closest_centroid_distance = std::numeric_limits<double>::max();
-    for (int j = 0; j < args.num_cluster; j++){
-      double distance = eucledian_distance(dataset[i], centroids[j], args.dims);
-      if (distance < closest_centroid_distance){
+    double distance = 0;
+    for (int j =0 ; j < args.num_cluster; j++){
+      distance = eucledian_distance(&dataset[i*args.dims], &dataset[(i+1)*args.dims], &centroids[(j)*args.dims], &centroids[(j+1)*args.dims], args.dims);
+      if (distance <  closest_centroid_distance){
         closest_centroid_distance = distance;
         labels[i] = j;
       }
     }
   }
 
+
   return labels;
 }
 
-double ** average_labeled_centroids(double ** dataset, int * labels, int clusters, options_t &args){
+double * average_labeled_centroids(double * dataset, int * labels, int clusters, options_t &args){
   // For a new center given points. Here we need to know how to calculate a centroid.
-  double ** centroids = (double **) calloc(args.num_cluster, sizeof(double *));
+  double * centroids = (double *) calloc(args.num_cluster * args.dims, sizeof(double));
   int * points_in_centroid = (int *) calloc(args.num_cluster, sizeof(int));
 
-  //For each centroid set the starting point to be zero for each dimensional value
-  for (int i =0; i < args.num_cluster; i++){
-    double * centroid = (double *) calloc (args.dims, sizeof(double));
-    centroids[i] = centroid;
-  }
 
   // For a given centroid define a keep track of all the values associated with that dimension and add them
   // Sum the corresponding points, we also need to know how many points are in each cluster..
@@ -98,14 +109,14 @@ double ** average_labeled_centroids(double ** dataset, int * labels, int cluster
     int index_of_centroid = labels[i];
     points_in_centroid[index_of_centroid]++;
     for (int j =0 ; j < args.dims; j++){
-      centroids[index_of_centroid][j] += dataset[i][j];
+      centroids[index_of_centroid*args.dims + j] += dataset[i*args.dims + j];
     }
   }
 
   // At the end divide by the total number of elements for each dimension
   for(int i = 0; i < args.num_cluster; i++){
     for (int j = 0; j < args.dims; j++){
-      centroids[i][j] /= points_in_centroid[i];
+      centroids[i*args.dims + j] /= points_in_centroid[i];
     }
   }
 
@@ -113,36 +124,35 @@ double ** average_labeled_centroids(double ** dataset, int * labels, int cluster
   return centroids;
 }
 
-bool converged(double ** new_centroids, double** old_centroids, options_t &args) {
+bool converged(double * new_centroids, double* old_centroids, options_t &args) {
   double distance = std::numeric_limits<double>::max();
   for (int i =0; i < args.num_cluster; i++){
-    distance = eucledian_distance(new_centroids[i], old_centroids[i], args.dims);
+    distance = eucledian_distance(&new_centroids[i*args.dims],&new_centroids[(i+1)*args.dims], &old_centroids[i*args.dims], &old_centroids[(i+1)*args.dims], args.dims);
     if (distance > args.threshold) return false;
   }
   // Check if each of the centroid has moved less than the threshold provided.
   return true;
 }
 
-double eucledian_distance(double * first, double * second, int dimensions){
+double eucledian_distance(double * first_start, double * first_end, double * second_start,double * second_end, int dimensions){
   double sum = 0;
-  for (int i = 0; i < dimensions; i++){
-    sum += pow(first[i]-second[i], 2.0);
+  double * first_tracker = first_start;
+  double * second_tracker = second_start;
+  for (;first_tracker != first_end; first_tracker++, second_tracker++){
+    sum += pow(*first_tracker-*second_tracker, 2.0);
   }
+  // sum += pow(first_end-second_end, 2.0);
+
   return sqrt(sum);
 }
 
-double ** copy_double(double ** original, options_t args)
+double * seq_copy(double * original, options_t args)
 {
-  double ** copy = (double **) malloc(args.num_cluster * sizeof(double*));
-  for (int i = 0; i < args.num_cluster; i++){
-    double * inner = (double *) malloc (args.dims * sizeof(double));
-    copy[i] = inner;
+  double * copy = (double *) malloc(args.num_cluster * args.dims * sizeof(double));
+
+  for (int i =0; i < args.num_cluster * args.dims; i++){
+    copy[i] = original[i];
   }
 
-  for (int i =0; i < args.num_cluster; i++){
-    for (int j = 0; j< args.dims; j++){
-      copy[i][j] = original[i][j];
-    }
-  }
   return copy;
 }

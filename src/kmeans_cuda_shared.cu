@@ -11,15 +11,26 @@
 // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#atomic-functions
 __device__ double shared_atomicAdd_d(double* address, double val)
 {
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
+    unsigned long long int* address_as_ull = (unsigned long long int*)address;
     unsigned long long int old = *address_as_ull, assumed;
 
     do {
         assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        __double_as_longlong(val +
-                               __longlong_as_double(assumed)));
+        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val + __longlong_as_double(assumed)));
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+
+__device__ double shared_atomicMin_d(double* address, double val)
+{
+    unsigned long long int* address_as_ull = (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+    do {
+        assumed = atomicMin(address_as_ull, __double_as_longlong(val));
+        old = atomicCAS(address_as_ull, old, assumed);
 
     // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
     } while (assumed != old);
@@ -111,12 +122,10 @@ int * cuda_shared_find_nearest_centroids(double * h_dataset, double * h_centroid
   //Allocate Device Memory
   double * d_dataset;
   double * d_centroids;
-  double * d_intermediate_values;
   int * d_labels;
 
   cudaMalloc((void**)&d_dataset, args.dims*args.number_of_values*sizeof(double));
   cudaMalloc((void**)&d_centroids, args.dims*args.num_cluster*sizeof(double));
-  cudaMalloc((void**)&d_intermediate_values, args.number_of_values * args.num_cluster * sizeof(double));
   cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
 
   // Transfer Memory from Host to Device
@@ -125,7 +134,7 @@ int * cuda_shared_find_nearest_centroids(double * h_dataset, double * h_centroid
 
   //Launch the kernel
   cudaEventRecord(start);
-  d_cuda_shared_find_nearest_centroids<<<dim3(args.number_of_values), dim3(args.num_cluster)>>>(d_dataset, d_centroids, d_intermediate_values, d_labels, args.dims, std::numeric_limits<double>::max());
+  d_cuda_shared_find_nearest_centroids<<<dim3(args.number_of_values), dim3(args.num_cluster)>>>(d_dataset, d_centroids, d_labels, args.dims, std::numeric_limits<double>::max());
   cudaEventRecord(stop);
 
   float ms = 0;
@@ -141,21 +150,17 @@ int * cuda_shared_find_nearest_centroids(double * h_dataset, double * h_centroid
   //Free Device Memory
   cudaFree(d_dataset);
   cudaFree(d_centroids);
-  cudaFree(d_intermediate_values);
   cudaFree(d_labels);
 
   return h_labels;
 }
 
-__global__ void d_cuda_shared_find_nearest_centroids(double * dataset, double * centroids, double * temp, int * labels, int dims, double max){
-  //For the dataset the thread id should not matter as each thread should point to the same point in the dataset, a block maps to a point
-  int point_starting_index = blockIdx.x * dims;
+__global__ void d_cuda_shared_find_nearest_centroids(double * dataset, double * centroids, int * labels, int dims, double max){
+  __shared__ double s_distance;
+  s_distance = max;
 
-  //Likewise each centroid does not care about what block it's in it only cares about what thread it's in, a thread maps to a centroid
-  int thread_start_index = threadIdx.x * dims;
 
-  //Unique index we use to store the distance for each point to each centroid
-  int stored_index = threadIdx.x + blockIdx.x * blockDim.x;
+  __syncthreads();
 
   if (threadIdx.x < blockDim.x){
     double distance = 0;
@@ -166,31 +171,17 @@ __global__ void d_cuda_shared_find_nearest_centroids(double * dataset, double * 
       // Where each thread would find the distance for point vs centroid, the block would sync and choose
       // lowest point to assign the label as.
       // In this case the starting index of the centroids is independent of what block you are in
-      distance += powf( dataset[point_starting_index+i] - centroids[thread_start_index + i], 2.0);
+      distance += powf( dataset[blockIdx.x * dims + i] - centroids[threadIdx.x * dims + i], 2.0);
     }
-  // At this point now each thread has caluclated their own distance, this should now be stored somewhere linked to said thread
-  // Threads is mapped to the cluster
-  distance = sqrtf(distance);
-  temp[stored_index] = distance;
-  }
+    // At this point now each thread has caluclated their own distance, this should now be stored somewhere linked to said thread
+    // Threads is mapped to the cluster
+    distance = sqrtf(distance);
+    shared_atomicMin_d(&s_distance, distance);
+    __syncthreads();
 
-  __syncthreads();
-
-  // Each thread at this point now has calculated the distance, we now should find the centroid with the smallest distance.
-  if (threadIdx.x == 0) {
-    double shortest_distance = max;
-    int id_short = 7;
-    // Loop through all the clusters, recall that the number of threads is the number of clusters, and here blockDim.x is number of clusters
-    for (int j =0; j < blockDim.x; j++){
-      if (temp[stored_index + j] < shortest_distance)
-      {
-        id_short = j;
-        shortest_distance = temp[stored_index + j];
-      }
+    if (distance == s_distance){
+      labels[blockIdx.x] = threadIdx.x;
     }
-
-    //A label needs to be only stored per point, each block is given a point thus, each block id represents the points index in the label
-    labels[blockIdx.x] = id_short;
   }
 }
 double * cuda_shared_average_labeled_centroids(double * h_dataset, int * h_labels, options_t &args, double * duration){

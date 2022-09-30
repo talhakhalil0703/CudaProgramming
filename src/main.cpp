@@ -16,17 +16,28 @@ int main(int argc, char **argv)
     struct options_t opts;
     get_opts(argc, argv, &opts);
 
+    // Read the input file
+    double * vals;
+    read_file(&opts, &vals);
+
+    // Random assign Centroids
     // Set the seed for random.
     kmeans_set_rand_seed(opts.seed);
-    double ** vals;
-    read_file(&opts, &vals, &vals);
-    // TODO remove otps.num_cluster its not needed as an argument
+
+    double * centroids = (double *) malloc(opts.num_cluster * opts.dims * sizeof(double));
+    for (int i = 0, index = 0; i < opts.num_cluster; i++){
+        index = kmeans_rand() % opts.number_of_values;
+        for (int j =0 ; j < opts.dims; j++){
+            centroids[i*opts.dims + j] = vals[index*opts.dims + j];
+        }
+    }
+
     if (opts.use_cpu){
-        kmeans_cpu(vals, opts.num_cluster, opts);
+        kmeans_cpu(vals, centroids, opts);
     } else if (opts.use_cuda_shared){
-        kmeans_cuda_shared(vals, opts.num_cluster, opts);
+        kmeans_cuda_shared(vals, centroids, opts);
     } else if (opts.use_cuda_basic){
-        kmeans_cuda_basic(vals, opts.num_cluster, opts);
+        kmeans_cuda_basic(vals, centroids, opts);
     }
 
     if (opts.c){
@@ -43,5 +54,5 @@ int main(int argc, char **argv)
             printf("\n");
         }
     }
-    free_input_points(vals, opts.number_of_values);
+    free(vals);
 }

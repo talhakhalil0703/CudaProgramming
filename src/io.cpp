@@ -4,8 +4,7 @@
 #include <iomanip>
 
 void read_file(struct options_t* args,
-               double***             input_vals,
-               double***             output_vals) {
+               double**             input_vals) {
 
     int dimensions = args->dims;
 
@@ -17,51 +16,20 @@ void read_file(struct options_t* args,
 	// Get num vals
 	in >> args->number_of_values;
 
-    double ** points;
     int garbage;
-    points = (double **) malloc (args->number_of_values * sizeof(double *));
-    double * point;
+    double * points = (double *) malloc (args->number_of_values * args->dims * sizeof(double));
+    int index = 0;
     for (int i =0; i < args->number_of_values; i++){
         //discard the first value this is the index, starting from 1...
         in >> garbage;
-        point = (double *) malloc (dimensions * sizeof(double));
         for (int j =0; j<dimensions; j++){
-            in >> point[j];
+            in >> points[index++];
         }
-        points[i] = point;
     }
+
     *input_vals = points;
     in.close();
     } else{
         std::cout << "Could not open file" << std::endl;
-    }
-}
-
-void free_input_points(double ** input, int number_of_values){
-    for (int i =0;  i < number_of_values; i++){
-        free(input[i]);
-    }
-    free(input);
-}
-
-void print_points(double ** input, int number_of_values, int dimensions){
-    std::cout << std::setprecision(5) << std::fixed;
-    for (int i =0; i < number_of_values; i++) {
-        std::cout << i;
-        for (int j =0; j < dimensions; j++){
-            std::cout << " " << input[i][j] ;
-        }
-        std::cout << std::endl;
-    }
-}
-
-void print_points(double * input, int number_of_values, int dimensions){
-    std::cout << std::setprecision(5) << std::fixed;
-    for (int i =0; i < number_of_values; i++) {
-        std::cout << i;
-        for (int j =0; j < dimensions; j++){
-            std::cout << " " << input[i*dimensions + j];
-        }
-        std::cout << std::endl;
     }
 }

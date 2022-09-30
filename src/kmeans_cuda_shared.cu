@@ -39,42 +39,12 @@ __device__ double shared_atomicMin_d(double* address, double val)
 }
 #endif
 
-void kmeans_cuda_shared(double **d_dataset, int clusters, options_t &args) {
+void kmeans_cuda_shared(double * dataset, double * centroids, options_t &args) {
 
-  // TODO: Do random assigning of centroids in the main function or helper somewhere else?
-  double **d_centroids = (double **)malloc(args.num_cluster * sizeof(double *));
-  int index = 0;
-  for (int i = 0; i < args.num_cluster; i++){
-    index = kmeans_rand() % args.number_of_values;
-    d_centroids[i] = d_dataset[index];
-  }
-
-  // print_points(centroids, args.num_cluster ,args.dims);
   int iterations = 0;
   double * old_centroids = NULL;
   bool done = false;
   int * labels;
-
-
-  //Conversion to 1D arrays
-
-  double * dataset = (double *) malloc (args.number_of_values * args.dims * sizeof(double));
-  double * centroids = (double *) malloc (args.num_cluster * args.dims * sizeof(double));
-
-  index = 0;
-  for (int i = 0; i< args.number_of_values; i++){
-    for (int j =0; j < args.dims; j++){
-      dataset[index++] = d_dataset[i][j];
-    }
-  }
-
-  index = 0;
-  for (int i = 0; i< args.num_cluster; i++){
-    for (int j =0; j < args.dims; j++){
-      centroids[index++] = d_centroids[i][j];
-    }
-  }
-
   double duration_total = 0;
   double duration = 0;
 

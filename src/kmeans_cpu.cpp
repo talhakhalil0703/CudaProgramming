@@ -5,35 +5,8 @@
 #include <limits>
 #include <chrono>
 
-void kmeans_cpu(double **d_dataset, int clusters, options_t &args) {
+void kmeans_cpu(double *dataset, double * centroids, options_t &args) {
 
-// Random assign Centroids
-  double **d_centroids = (double **)malloc(args.num_cluster * sizeof(double *));
-  int index = 0;
-  for (int i = 0; i < args.num_cluster; i++){
-    index = kmeans_rand() % args.number_of_values;
-    d_centroids[i] = d_dataset[index];
-  }
-  //Conversion to 1D arrays
-
-  double * dataset = (double *) malloc (args.number_of_values * args.dims * sizeof(double));
-  double * centroids = (double *) malloc (args.num_cluster * args.dims * sizeof(double));
-
-  index = 0;
-  for (int i = 0; i< args.number_of_values; i++){
-    for (int j =0; j < args.dims; j++){
-      dataset[index++] = d_dataset[i][j];
-    }
-  }
-
-  index = 0;
-  for (int i = 0; i< args.num_cluster; i++){
-    for (int j =0; j < args.dims; j++){
-      centroids[index++] = d_centroids[i][j];
-    }
-  }
-
-  // print_points(centroids, args.num_cluster ,args.dims);
   int iterations = 0;
   double * old_centroids = NULL;
   bool done = false;
@@ -57,7 +30,7 @@ void kmeans_cpu(double **d_dataset, int clusters, options_t &args) {
     // }
 
     //the new centroids are the average of all points that map to each centroid
-    centroids = average_labeled_centroids(dataset, labels, clusters, args);
+    centroids = average_labeled_centroids(dataset, labels, args);
 
     done = iterations > args.max_num_iter || converged(centroids, old_centroids, args);
 
@@ -97,7 +70,7 @@ int * find_nearest_centroids(double * dataset, double * centroids, options_t &ar
   return labels;
 }
 
-double * average_labeled_centroids(double * dataset, int * labels, int clusters, options_t &args){
+double * average_labeled_centroids(double * dataset, int * labels, options_t &args){
   // For a new center given points. Here we need to know how to calculate a centroid.
   double * centroids = (double *) calloc(args.num_cluster * args.dims, sizeof(double));
   int * points_in_centroid = (int *) calloc(args.num_cluster, sizeof(int));

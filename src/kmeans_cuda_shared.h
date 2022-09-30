@@ -1,7 +1,7 @@
 #include "argparse.h"
 #include <cuda_runtime.h>
 
-void kmeans_cuda_shared(double **dataset, int clusters, options_t &args);
+void kmeans_cuda_shared(double *dataset, double * centroids, options_t &args);
 double * cuda_shared_copy(double * original, options_t args);
 
 bool cuda_shared_converged(double * new_centroids, double* old_centroids, options_t &args, double * duration);

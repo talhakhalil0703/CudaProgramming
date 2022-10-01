@@ -6,6 +6,7 @@
 #include "io.h"
 #include "kmeans_cuda_basic.h"
 #include "kmeans_cuda_shared.h"
+#include "kmeans_thrust.h"
 #include "kmeans_cpu.h"
 
 using namespace std;
@@ -38,6 +39,8 @@ int main(int argc, char **argv)
         kmeans_cuda_shared(vals, centroids, opts);
     } else if (opts.use_cuda_basic){
         kmeans_cuda_basic(vals, centroids, opts);
+    } else if (opts.use_thrust){
+        kmeans_thrust(vals, centroids, opts);
     }
 
     if (opts.c){

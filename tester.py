@@ -10,7 +10,7 @@ GRADER_THRESHOLD = 0.0000100000001 # floating point errors
 EXEC = "./bin/kmeans"
 RUNS = 5
 
-METHODS = ["--use_cpu", "--use_cuda_basic", "--use_cuda_shared"]
+METHODS = ["--use_cuda_basic", "--use_cuda_shared"]
 
 INPUT_ANSWERS_FILES = ["input/random-n2048-d16-c16-answer.txt", "input/random-n16384-d24-c16-answer.txt", "input/random-n65536-d32-c16-answer.txt"]
 INPUT_FILES = ["input/random-n2048-d16-c16.txt", "input/random-n16384-d24-c16.txt", "input/random-n65536-d32-c16.txt"]
@@ -43,10 +43,11 @@ def main():
                     for d_id, dimension in enumerate(point.split(" ")): # First number is index, we can skip, subsequent DIMS numbers
                         if d_id == 0 or d_id==dims+1: continue # Random space at end so we skip that as well
                         if float(dimension) < (cluster[p_id-1][d_id-1]  - GRADER_THRESHOLD) or float(dimension) > (cluster[p_id-1][d_id-1]  + GRADER_THRESHOLD):
-                            print(f"Output: {float(dimension)}, Answer: {cluster[p_id-1][d_id-1] - GRADER_THRESHOLD} - {cluster[p_id-1][d_id-1] + GRADER_THRESHOLD}")
+                            print(f"Output: {float(dimension)}, Answer: {cluster[p_id-1][d_id-1] - GRADER_THRESHOLD} - {cluster[p_id-1][d_id-1] + GRADER_THRESHOLD} point_id {p_id} dimension_id {d_id}")
                             match = False
             if not match:
                 print(f"{input} does not match for {method}")
+                print(f"{command_to_run}")
             else:
                 print(f"{command_to_run} : {timing/RUNS} ms, averaged over {RUNS} runs")
 

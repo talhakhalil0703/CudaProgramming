@@ -29,6 +29,11 @@ void kmeans_cuda_shared(double * dataset, double * centroids, options_t &args) {
   double duration_total = 0;
   double duration = 0;
 
+  cudaEvent_t start_t, stop_t;
+  cudaEventCreate(&start_t);
+  cudaEventCreate(&stop_t);
+  cudaEventRecord(start_t);
+
   while(!done){
     //copy
     duration = 0;
@@ -56,7 +61,13 @@ void kmeans_cuda_shared(double * dataset, double * centroids, options_t &args) {
     if (!done) free (labels);
   }
 
-  printf("%d,%lf\n", iterations, duration_total/iterations);
+  cudaEventRecord(stop_t);
+  cudaDeviceSynchronize();
+
+  float ms = 0;
+  cudaEventElapsedTime(&ms, start_t, stop_t);
+
+  printf("%d,%lf\n", iterations, ms/iterations);
 
   args.labels = labels;
   args.centroids = centroids;

@@ -7,6 +7,7 @@
 #include <math.h>
 
 #define NUMBER_OF_THREADS 1024
+#define PRINT_TIMES
 
 void kmeans_cuda_basic(float *dataset, float * centroids, options_t &args) {
   int iterations = 0;
@@ -87,9 +88,11 @@ void cuda_find_nearest_centroids(float * d_dataset, int * d_labels, float * d_ce
   cudaEventRecord(stop_t);
   cudaDeviceSynchronize();
 
-  // float total_time = 0;
-  // cudaEventElapsedTime(&total_time, start_t, stop_t);
-  // std::cout << "find_nearest_centroids: " << total_time << std::endl;
+  #ifdef PRINT_TIMES
+    float total_time = 0;
+    cudaEventElapsedTime(&total_time, start_t, stop_t);
+    std::cout << "find_nearest_centroids: " << total_time << std::endl;
+  #endif
 
 }
 
@@ -142,10 +145,11 @@ void cuda_average_labeled_centroids(float * d_centroids, float * d_dataset, int 
   // Sync
   cudaEventRecord(stop_t);
   cudaDeviceSynchronize();
-  // float total_time = 0;
-  // cudaEventElapsedTime(&total_time, start_t, stop_t);
-  // std::cout << "averaged_labeled_centroids: " << total_time << std::endl;
-
+  #ifdef PRINT_TIMES
+  float total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
+  std::cout << "averaged_labeled_centroids: " << total_time << std::endl;
+  #endif
   num_blocks = args.num_cluster*args.dims/NUMBER_OF_THREADS;
   if (num_blocks == 0) num_blocks = 1;
   cudaEventCreate(&start_t);
@@ -154,9 +158,11 @@ void cuda_average_labeled_centroids(float * d_centroids, float * d_dataset, int 
   cudaEventRecord(stop_t);
 
   cudaDeviceSynchronize();
-  // total_time = 0;
-  // cudaEventElapsedTime(&total_time, start_t, stop_t);
-  // std::cout << "averaged_labeled_centroids 3: " << total_time << std::endl;
+  #ifdef PRINT_TIMES
+  total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
+  std::cout << "averaged_labeled_centroids 3: " << total_time << std::endl;
+  #endif
 
   // Free Device Memory
   cudaFree(d_points_in_centroids);
@@ -223,10 +229,13 @@ bool cuda_converged(float * d_new_centroids, float* d_old_centroids, options_t &
   d_cuda_convergence_helper<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS)>>>(d_new_centroids, d_old_centroids, d_intermediate_values, args.dims, args.num_cluster);
   cudaEventRecord(stop_t);
   cudaDeviceSynchronize();
-  // float total_time = 0;
-  // cudaEventElapsedTime(&total_time, start_t, stop_t);
-  // std::cout << "cuda_converged: " << total_time << std::endl;
+
+  #ifdef PRINT_TIMES
+  float total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
+  std::cout << "cuda_converged: " << total_time << std::endl;
   num_blocks = args.num_cluster/NUMBER_OF_THREADS;
+  #endif
   if (num_blocks == 0) num_blocks = 1;
   cudaEventRecord(start_t);
 
@@ -234,11 +243,12 @@ bool cuda_converged(float * d_new_centroids, float* d_old_centroids, options_t &
   cudaEventRecord(stop_t);
 
   cudaDeviceSynchronize();
-//  total_time = 0;
-//   cudaEventElapsedTime(&total_time, start_t, stop_t);
-//   std::cout << "cuda_converged 2: " << total_time << std::endl;
-  //Sync
+  #ifdef PRINT_TIMES
 
+  total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
+  std::cout << "cuda_converged 2: " << total_time << std::endl;
+  #endif
   // Copy Memory back from Device to Host
   cudaMemcpy(h_converged, d_converged, sizeof(int), cudaMemcpyDeviceToHost);
 

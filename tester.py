@@ -6,7 +6,7 @@ from unittest import TextTestResult
 ITERATION_LIMIT = 150
 CONVERGENCE_THRESHOLD = 0.000001
 SEED = 8675309
-GRADER_THRESHOLD = 0.0000100000001 # floating point errors
+GRADER_THRESHOLD = 0.0001100000001 # floating point errors
 EXEC = "./bin/kmeans"
 RUNS = 5
 

@@ -8,26 +8,26 @@
 
 #define NUMBER_OF_THREADS 1024
 
-void kmeans_cuda_basic(double *dataset, double * centroids, options_t &args) {
+void kmeans_cuda_basic(float *dataset, float * centroids, options_t &args) {
   int iterations = 0;
   bool done = false;
-  double duration_total = 0;
-  double duration = 0;
+  float duration_total = 0;
+  float duration = 0;
 
   int * d_labels;
   cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
   cudaMemset(d_labels, 0, args.number_of_values * sizeof(int)); // Should start from zero?
 
-  double * d_dataset;
-  cudaMalloc((void**)&d_dataset, args.number_of_values * args.dims * sizeof(double));
-  cudaMemcpy(d_dataset, dataset, args.number_of_values * args.dims * sizeof(double), cudaMemcpyHostToDevice);
+  float * d_dataset;
+  cudaMalloc((void**)&d_dataset, args.number_of_values * args.dims * sizeof(float));
+  cudaMemcpy(d_dataset, dataset, args.number_of_values * args.dims * sizeof(float), cudaMemcpyHostToDevice);
 
-  double * d_centroids;
-  cudaMalloc((void**)&d_centroids, args.num_cluster * args.dims * sizeof(double));
-  cudaMemcpy(d_centroids, centroids, args.num_cluster * args.dims * sizeof(double), cudaMemcpyHostToDevice);
+  float * d_centroids;
+  cudaMalloc((void**)&d_centroids, args.num_cluster * args.dims * sizeof(float));
+  cudaMemcpy(d_centroids, centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyHostToDevice);
 
-  double * old_centroids;
-  cudaMalloc((void**)&old_centroids, args.num_cluster * args.dims * sizeof(double));
+  float * old_centroids;
+  cudaMalloc((void**)&old_centroids, args.num_cluster * args.dims * sizeof(float));
 
   cudaEvent_t start_t, stop_t;
   cudaEventCreate(&start_t);
@@ -38,7 +38,7 @@ void kmeans_cuda_basic(double *dataset, double * centroids, options_t &args) {
     //copy
     duration = 0;
 
-    cudaMemcpy(old_centroids, d_centroids, args.num_cluster * args.dims * sizeof(double), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(old_centroids, d_centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyDeviceToDevice);
 
     iterations++;
 
@@ -63,7 +63,7 @@ void kmeans_cuda_basic(double *dataset, double * centroids, options_t &args) {
   int * labels;
   labels = (int *) malloc(args.number_of_values*sizeof(int));
   cudaMemcpy(labels, d_labels, args.number_of_values*sizeof(int), cudaMemcpyDeviceToHost);
-  cudaMemcpy(centroids,d_centroids, args.num_cluster * args.dims * sizeof(double), cudaMemcpyDeviceToHost);
+  cudaMemcpy(centroids,d_centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyDeviceToHost);
 
   cudaFree(old_centroids);
   cudaFree(d_labels);
@@ -74,7 +74,7 @@ void kmeans_cuda_basic(double *dataset, double * centroids, options_t &args) {
   args.centroids = centroids;
 }
 
-void cuda_find_nearest_centroids(double * d_dataset, int * d_labels, double * d_centroids, options_t &args){
+void cuda_find_nearest_centroids(float * d_dataset, int * d_labels, float * d_centroids, options_t &args){
   //Launch the kernel
   cudaEvent_t start_t, stop_t;
   cudaEventCreate(&start_t);
@@ -82,7 +82,7 @@ void cuda_find_nearest_centroids(double * d_dataset, int * d_labels, double * d_
   int num_blocks = args.number_of_values/NUMBER_OF_THREADS;
   if (num_blocks == 0) num_blocks = 1;
   cudaEventRecord(start_t);
-  d_cuda_find_nearest_centroids<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS)>>>(d_dataset, d_centroids, d_labels, args.dims, args.num_cluster, std::numeric_limits<double>::max(), args.number_of_values);
+  d_cuda_find_nearest_centroids<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS)>>>(d_dataset, d_centroids, d_labels, args.dims, args.num_cluster, std::numeric_limits<float>::max(), args.number_of_values);
   //Sync
   cudaEventRecord(stop_t);
   cudaDeviceSynchronize();
@@ -93,14 +93,14 @@ void cuda_find_nearest_centroids(double * d_dataset, int * d_labels, double * d_
 
 }
 
-__global__ void d_cuda_find_nearest_centroids(double * dataset, double * centroids, int * labels, int dims, int num_cluster, double max, int number_of_values){
+__global__ void d_cuda_find_nearest_centroids(float * dataset, float * centroids, int * labels, int dims, int num_cluster, float max, int number_of_values){
   // Each thread is given a point and for each point we want to find the closest centroid.
   int index = threadIdx.x + blockIdx.x * blockDim.x;
 
   // Ensure that the point is actually a point that exists
   if (index <  number_of_values){
-    double shortest_distance = max;
-    double current_distance = 0;
+    float shortest_distance = max;
+    float current_distance = 0;
     int closest_index = 0;
 
     for (int i = 0; i < num_cluster; i++){
@@ -119,7 +119,7 @@ __global__ void d_cuda_find_nearest_centroids(double * dataset, double * centroi
   }
 }
 
-void cuda_average_labeled_centroids(double * d_centroids, double * d_dataset, int * d_labels, options_t &args){
+void cuda_average_labeled_centroids(float * d_centroids, float * d_dataset, int * d_labels, options_t &args){
   // Allocate Device Memory
   cudaEvent_t start_t, stop_t;
   cudaEventCreate(&start_t);
@@ -129,7 +129,7 @@ void cuda_average_labeled_centroids(double * d_centroids, double * d_dataset, in
   cudaMalloc ((void **)&d_points_in_centroids, args.num_cluster*sizeof(int));
 
   // Transfer Memory From Host To Device
-  cudaMemset(d_centroids, 0, args.num_cluster * args.dims * sizeof(double)); // Should start from zero?
+  cudaMemset(d_centroids, 0, args.num_cluster * args.dims * sizeof(float)); // Should start from zero?
   cudaMemset(d_points_in_centroids, 0, args.num_cluster * sizeof(int)); // Should start from zero?
 
   // Launch the kernel
@@ -163,7 +163,7 @@ void cuda_average_labeled_centroids(double * d_centroids, double * d_dataset, in
 
 }
 
-__global__ void d_cuda_average_labeled_centroids(double * dataset, int * labels, int * points_in_centroids, double * centroids, int number_of_values, int dims, int num_cluster){
+__global__ void d_cuda_average_labeled_centroids(float * dataset, int * labels, int * points_in_centroids, float * centroids, int number_of_values, int dims, int num_cluster){
   // Unique index for each point
   int index = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -183,7 +183,7 @@ __global__ void d_cuda_average_labeled_centroids(double * dataset, int * labels,
   }
 }
 
-__global__ void d_cuda_average_labeled_centroids_divide(double * centroids, int * points_in_centroids, int dims, int num_cluster){
+__global__ void d_cuda_average_labeled_centroids_divide(float * centroids, int * points_in_centroids, int dims, int num_cluster){
   int index = threadIdx.x + blockIdx.x * blockDim.x;
    if (index < dims*num_cluster) {
     //For each centroid divide it's dimensions with the amount of points present.
@@ -196,7 +196,7 @@ __global__ void d_cuda_average_labeled_centroids_divide(double * centroids, int 
 
 }
 
-bool cuda_converged(double * d_new_centroids, double* d_old_centroids, options_t &args) {
+bool cuda_converged(float * d_new_centroids, float* d_old_centroids, options_t &args) {
 
   int * h_converged = (int *) malloc(sizeof(int));
 
@@ -206,14 +206,14 @@ bool cuda_converged(double * d_new_centroids, double* d_old_centroids, options_t
   cudaEventCreate(&stop_t);
 
   //Allocate Device Memory
-  double * d_intermediate_values;
+  float * d_intermediate_values;
   int * d_converged;
 
-  cudaMalloc((void**)&d_intermediate_values, args.num_cluster*sizeof(double));
+  cudaMalloc((void**)&d_intermediate_values, args.num_cluster*sizeof(float));
   cudaMalloc((void**)&d_converged, sizeof(int));
 
   // Transfer Memory from Host to Device
-  cudaMemset(d_intermediate_values, 0, args.num_cluster * sizeof(double)); // Should start from zero?
+  cudaMemset(d_intermediate_values, 0, args.num_cluster * sizeof(float)); // Should start from zero?
   cudaMemset(d_converged, 0, sizeof(int)); // Should start from zero?
 
   int num_blocks = args.num_cluster*args.dims/NUMBER_OF_THREADS;
@@ -258,14 +258,14 @@ bool cuda_converged(double * d_new_centroids, double* d_old_centroids, options_t
   return converged;
 }
 
-__global__ void d_cuda_convergence_helper(double * new_c, double * old_c, double * temp, int dimensions, int num_cluster){
+__global__ void d_cuda_convergence_helper(float * new_c, float * old_c, float * temp, int dimensions, int num_cluster){
   int index = threadIdx.x + blockIdx.x * blockDim.x;
   if (index < dimensions * num_cluster){
-    atomicAdd(&temp[index/dimensions], (double)powf( new_c[index] - old_c[index], 2.0));
+    atomicAdd(&temp[index/dimensions], (float)powf( new_c[index] - old_c[index], 2.0));
   }
 }
 
-__global__ void d_cuda_convergence_helper_threshold(double * temp, int * converged, int num_cluster, double threshold){
+__global__ void d_cuda_convergence_helper_threshold(float * temp, int * converged, int num_cluster, float threshold){
   int index = threadIdx.x + blockIdx.x * blockDim.x;
   if (index < num_cluster){
     if (threshold < sqrtf(temp[index])){
@@ -274,9 +274,9 @@ __global__ void d_cuda_convergence_helper_threshold(double * temp, int * converg
   }
 }
 
-double * cuda_copy(double * original, options_t args)
+float * cuda_copy(float * original, options_t args)
 {
-  double * copy = (double *) malloc(args.num_cluster * args.dims * sizeof(double));
+  float * copy = (float *) malloc(args.num_cluster * args.dims * sizeof(float));
 
   for (int i =0; i < args.num_cluster * args.dims; i++){
     copy[i] = original[i];

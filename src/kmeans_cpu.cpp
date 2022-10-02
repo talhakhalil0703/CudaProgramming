@@ -5,13 +5,13 @@
 #include <limits>
 #include <chrono>
 
-void kmeans_cpu(double *dataset, double * centroids, options_t &args) {
+void kmeans_cpu(float *dataset, float * centroids, options_t &args) {
 
   int iterations = 0;
-  double * old_centroids = NULL;
+  float * old_centroids = NULL;
   bool done = false;
   int * labels;
-  double duration_total = 0;
+  float duration_total = 0;
 
   while(!done){
     //copy
@@ -48,15 +48,15 @@ void kmeans_cpu(double *dataset, double * centroids, options_t &args) {
   printf("%d,%lf\n", iterations, duration_total/iterations);
 }
 
-int * find_nearest_centroids(double * dataset, double * centroids, options_t &args){
+int * find_nearest_centroids(float * dataset, float * centroids, options_t &args){
   // For each point we calculate the distance from that point to all centroids, and then store the closest point as the index of the centroid
   // The length of labels here would be the number of points we have...
   int * labels = (int *) calloc (args.number_of_values, sizeof(int));
-  double closest_centroid_distance;
+  float closest_centroid_distance;
 
   for (int i =0; i < args.number_of_values; i++){
-    closest_centroid_distance = std::numeric_limits<double>::max();
-    double distance = 0;
+    closest_centroid_distance = std::numeric_limits<float>::max();
+    float distance = 0;
     for (int j =0 ; j < args.num_cluster; j++){
       distance = eucledian_distance(&dataset[i*args.dims], &dataset[(i+1)*args.dims], &centroids[(j)*args.dims], &centroids[(j+1)*args.dims], args.dims);
       if (distance <  closest_centroid_distance){
@@ -70,9 +70,9 @@ int * find_nearest_centroids(double * dataset, double * centroids, options_t &ar
   return labels;
 }
 
-double * average_labeled_centroids(double * dataset, int * labels, options_t &args){
+float * average_labeled_centroids(float * dataset, int * labels, options_t &args){
   // For a new center given points. Here we need to know how to calculate a centroid.
-  double * centroids = (double *) calloc(args.num_cluster * args.dims, sizeof(double));
+  float * centroids = (float *) calloc(args.num_cluster * args.dims, sizeof(float));
   int * points_in_centroid = (int *) calloc(args.num_cluster, sizeof(int));
 
 
@@ -97,8 +97,8 @@ double * average_labeled_centroids(double * dataset, int * labels, options_t &ar
   return centroids;
 }
 
-bool converged(double * new_centroids, double* old_centroids, options_t &args) {
-  double distance = std::numeric_limits<double>::max();
+bool converged(float * new_centroids, float* old_centroids, options_t &args) {
+  float distance = std::numeric_limits<float>::max();
   for (int i =0; i < args.num_cluster; i++){
     distance = eucledian_distance(&new_centroids[i*args.dims],&new_centroids[(i+1)*args.dims], &old_centroids[i*args.dims], &old_centroids[(i+1)*args.dims], args.dims);
     if (distance > args.threshold) return false;
@@ -107,10 +107,10 @@ bool converged(double * new_centroids, double* old_centroids, options_t &args) {
   return true;
 }
 
-double eucledian_distance(double * first_start, double * first_end, double * second_start,double * second_end, int dimensions){
-  double sum = 0;
-  double * first_tracker = first_start;
-  double * second_tracker = second_start;
+float eucledian_distance(float * first_start, float * first_end, float * second_start,float * second_end, int dimensions){
+  float sum = 0;
+  float * first_tracker = first_start;
+  float * second_tracker = second_start;
   for (;first_tracker != first_end; first_tracker++, second_tracker++){
     sum += pow(*first_tracker-*second_tracker, 2.0);
   }
@@ -119,9 +119,9 @@ double eucledian_distance(double * first_start, double * first_end, double * sec
   return sqrt(sum);
 }
 
-double * seq_copy(double * original, options_t args)
+float * seq_copy(float * original, options_t args)
 {
-  double * copy = (double *) malloc(args.num_cluster * args.dims * sizeof(double));
+  float * copy = (float *) malloc(args.num_cluster * args.dims * sizeof(float));
 
   for (int i =0; i < args.num_cluster * args.dims; i++){
     copy[i] = original[i];

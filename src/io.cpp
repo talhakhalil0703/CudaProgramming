@@ -4,7 +4,7 @@
 #include <iomanip>
 
 void read_file(struct options_t* args,
-               double**             input_vals) {
+               float**             input_vals) {
 
     int dimensions = args->dims;
 
@@ -17,7 +17,7 @@ void read_file(struct options_t* args,
 	in >> args->number_of_values;
 
     int garbage;
-    double * points = (double *) malloc (args->number_of_values * args->dims * sizeof(double));
+    float * points = (float *) malloc (args->number_of_values * args->dims * sizeof(float));
     int index = 0;
     for (int i =0; i < args->number_of_values; i++){
         //discard the first value this is the index, starting from 1...

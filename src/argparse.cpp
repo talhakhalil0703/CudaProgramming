@@ -11,7 +11,7 @@ void get_opts(int argc,
         std::cout << "\t--dims or -d <dimenisons of the points>" << std::endl;
         std::cout << "\t--inputfilename or -i <file_path>" << std::endl;
         std::cout << "\t--max_num_iter or -m <number of maximum iterations>" << std::endl;
-        std::cout << "\t--threshold or -t <double specifying the threshold for convergence test>" << std::endl;
+        std::cout << "\t--threshold or -t <float specifying the threshold for convergence test>" << std::endl;
         std::cout << "\t--seed or -s <integer seed used to specify the seed for rand()>" << std::endl;
         std::cout << "\t[Optional] --output_conrol or -c flag that controls output of the program" << std::endl;
         std::cout << "\tOnly provide one of the following:" << std::endl;

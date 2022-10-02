@@ -10,7 +10,7 @@ struct options_t {
     int dims;
     char *inputfilename; // This naming style was a requirement for the grader
     int max_num_iter;
-    double threshold;
+    float threshold;
     int seed;
     bool c;
     bool use_cpu;
@@ -19,7 +19,7 @@ struct options_t {
     bool use_thrust;
     int number_of_values;
     int * labels;
-    double * centroids;
+    float * centroids;
 };
 
 void get_opts(int argc, char **argv, struct options_t *opts);

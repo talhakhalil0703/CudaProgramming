@@ -7,28 +7,28 @@
 #include <math.h>
 
 
-__device__ double atomic_min(double* address, double val)
+__device__ float atomic_min(float* address, float val)
 {
-    unsigned long long int* address_as_ull = (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
+    int* address_as_ull = (int*)address;
+    int old = *address_as_ull, assumed;
     do {
-        assumed = atomicMin(address_as_ull, __double_as_longlong(val));
+        assumed = atomicMin(address_as_ull, __float_as_int(val));
         old = atomicCAS(address_as_ull, old, assumed);
 
     // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
     } while (assumed != old);
 
-    return __longlong_as_double(old);
+    return __int_as_float(old);
 }
 
-void kmeans_thrust(double * dataset, double * centroids, options_t &args) {
+void kmeans_thrust(float * dataset, float * centroids, options_t &args) {
 
   int iterations = 0;
-  double * old_centroids = NULL;
+  float * old_centroids = NULL;
   bool done = false;
   int * labels;
-  double duration_total = 0;
-  double duration = 0;
+  float duration_total = 0;
+  float duration = 0;
 
   while(!done){
     //copy
@@ -63,7 +63,7 @@ void kmeans_thrust(double * dataset, double * centroids, options_t &args) {
   args.centroids = centroids;
 }
 
-int * thrust_find_nearest_centroids(double * h_dataset, double * h_centroids, options_t &args, double * duration){
+int * thrust_find_nearest_centroids(float * h_dataset, float * h_centroids, options_t &args, float * duration){
   //Timing
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
@@ -72,21 +72,21 @@ int * thrust_find_nearest_centroids(double * h_dataset, double * h_centroids, op
   int * h_labels = (int *)malloc(args.number_of_values * sizeof(int));
 
   //Allocate Device Memory
-  double * d_dataset;
-  double * d_centroids;
+  float * d_dataset;
+  float * d_centroids;
   int * d_labels;
 
-  cudaMalloc((void**)&d_dataset, args.dims*args.number_of_values*sizeof(double));
-  cudaMalloc((void**)&d_centroids, args.dims*args.num_cluster*sizeof(double));
+  cudaMalloc((void**)&d_dataset, args.dims*args.number_of_values*sizeof(float));
+  cudaMalloc((void**)&d_centroids, args.dims*args.num_cluster*sizeof(float));
   cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
 
   // Transfer Memory from Host to Device
-  cudaMemcpy(d_dataset, h_dataset, args.dims*args.number_of_values*sizeof(double), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_centroids, h_centroids, args.dims*args.num_cluster*sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_dataset, h_dataset, args.dims*args.number_of_values*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_centroids, h_centroids, args.dims*args.num_cluster*sizeof(float), cudaMemcpyHostToDevice);
 
   //Launch the kernel
   cudaEventRecord(start);
-  thrust_find_nearest_centroids_helper<<<dim3(args.number_of_values), dim3(args.num_cluster)>>>(d_dataset, d_centroids, d_labels, args.dims, std::numeric_limits<double>::max());
+  thrust_find_nearest_centroids_helper<<<dim3(args.number_of_values), dim3(args.num_cluster)>>>(d_dataset, d_centroids, d_labels, args.dims, std::numeric_limits<float>::max());
   cudaEventRecord(stop);
 
   float ms = 0;
@@ -107,15 +107,15 @@ int * thrust_find_nearest_centroids(double * h_dataset, double * h_centroids, op
   return h_labels;
 }
 
-__global__ void thrust_find_nearest_centroids_helper(double * dataset, double * centroids, int * labels, int dims, double max){
-  __shared__ double s_distance;
+__global__ void thrust_find_nearest_centroids_helper(float * dataset, float * centroids, int * labels, int dims, float max){
+  __shared__ float s_distance;
   s_distance = max;
 
 
   __syncthreads();
 
   if (threadIdx.x < blockDim.x){
-    double distance = 0;
+    float distance = 0;
     for (int i = 0; i < dims; i++ ){
       // Centroid indexing is different from the indexing of the data set!
       // This needs to be looked into further, when you look at this next write out pseudo code first
@@ -136,27 +136,27 @@ __global__ void thrust_find_nearest_centroids_helper(double * dataset, double * 
     }
   }
 }
-double * thrust_average_labeled_centroids(double * h_dataset, int * h_labels, options_t &args, double * duration){
+float * thrust_average_labeled_centroids(float * h_dataset, int * h_labels, options_t &args, float * duration){
   //Timing
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
 
   // First turn the dataset into a singular dimension
-  double * h_centroids = (double *)malloc(args.num_cluster * args.dims * sizeof(double));
+  float * h_centroids = (float *)malloc(args.num_cluster * args.dims * sizeof(float));
 
   // Allocate Device Memory
-  double * d_dataset;
+  float * d_dataset;
   int * d_labels;
-  double * d_centroids;
-  cudaMalloc((void**)&d_dataset, args.number_of_values * args.dims * sizeof(double));
+  float * d_centroids;
+  cudaMalloc((void**)&d_dataset, args.number_of_values * args.dims * sizeof(float));
   cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
-  cudaMalloc((void**)&d_centroids, args.num_cluster * args.dims * sizeof(double));
+  cudaMalloc((void**)&d_centroids, args.num_cluster * args.dims * sizeof(float));
 
   // Transfer Memory From Host To Device
-  cudaMemcpy(d_dataset, h_dataset, args.number_of_values * args.dims * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_dataset, h_dataset, args.number_of_values * args.dims * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_labels, h_labels, args.number_of_values * sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_centroids, 0, args.num_cluster * args.dims * sizeof(double), cudaMemcpyHostToDevice); // Should start from zero?
+  cudaMemcpy(d_centroids, 0, args.num_cluster * args.dims * sizeof(float), cudaMemcpyHostToDevice); // Should start from zero?
 
   // Launch the kernel
   cudaEventRecord(start);
@@ -166,7 +166,7 @@ double * thrust_average_labeled_centroids(double * h_dataset, int * h_labels, op
   // Sync
   cudaDeviceSynchronize();
   // Copy Memory back from Device to Host
-  cudaMemcpy(h_centroids, d_centroids, args.num_cluster * args.dims * sizeof(double), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_centroids, d_centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyDeviceToHost);
   // Free Device Memory
   cudaFree(d_dataset);
   cudaFree(d_labels);
@@ -178,7 +178,7 @@ double * thrust_average_labeled_centroids(double * h_dataset, int * h_labels, op
   return h_centroids;
 }
 
-__global__ void thrust_average_labeled_centroids_helper(double * d_dataset, int * d_labels, double * centroids, int number_of_values){
+__global__ void thrust_average_labeled_centroids_helper(float * d_dataset, int * d_labels, float * centroids, int number_of_values){
   // Dimensions is blockDim.x
   // A block here manages the centroid Id
   // A thread here manages the addition it needs to do for that dimension
@@ -200,27 +200,27 @@ __global__ void thrust_average_labeled_centroids_helper(double * d_dataset, int 
 }
 
 
-bool thrust_converged(double * h_new_centroids, double* h_old_centroids, options_t &args, double * duration) {
+bool thrust_converged(float * h_new_centroids, float* h_old_centroids, options_t &args, float * duration) {
 
   //Timing
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
 
-  bool * h_convergence = (bool *)malloc(args.num_cluster * sizeof(double));
+  bool * h_convergence = (bool *)malloc(args.num_cluster * sizeof(float));
 
   //Allocate Device Memory
-  double * d_new_centroids;
-  double * d_old_centroids;
+  float * d_new_centroids;
+  float * d_old_centroids;
   bool * d_convergence;
 
-  cudaMalloc((void**)&d_new_centroids, args.dims*args.num_cluster*sizeof(double));
-  cudaMalloc((void**)&d_old_centroids, args.dims*args.num_cluster*sizeof(double));
+  cudaMalloc((void**)&d_new_centroids, args.dims*args.num_cluster*sizeof(float));
+  cudaMalloc((void**)&d_old_centroids, args.dims*args.num_cluster*sizeof(float));
   cudaMalloc((void**)&d_convergence, args.num_cluster*sizeof(bool));
 
   // Transfer Memory from Host to Device
-  cudaMemcpy(d_new_centroids, h_new_centroids, args.dims*args.num_cluster*sizeof(double), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_old_centroids, h_old_centroids, args.dims*args.num_cluster*sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_new_centroids, h_new_centroids, args.dims*args.num_cluster*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_old_centroids, h_old_centroids, args.dims*args.num_cluster*sizeof(float), cudaMemcpyHostToDevice);
 
   cudaEventRecord(start);
   thrust_convergence_helper<<<dim3(args.num_cluster), dim3(args.dims)>>>(d_new_centroids, d_old_centroids, d_convergence, args.threshold, args.dims);
@@ -255,13 +255,13 @@ bool thrust_converged(double * h_new_centroids, double* h_old_centroids, options
   return converged;
 }
 
-__global__ void thrust_convergence_helper(double * new_c, double * old_c, bool * convergence, double threshold, int dimensions){
+__global__ void thrust_convergence_helper(float * new_c, float * old_c, bool * convergence, float threshold, int dimensions){
   int index = threadIdx.x + blockIdx.x * blockDim.x;
-  __shared__ double distance;
+  __shared__ float distance;
   distance = 0;
 
   if (threadIdx.x < dimensions){
-    atomicAdd(&distance, (double)powf( new_c[index] - old_c[index], 2.0));
+    atomicAdd(&distance, (float)powf( new_c[index] - old_c[index], 2.0));
   }
 
   __syncthreads();
@@ -277,9 +277,9 @@ __global__ void thrust_convergence_helper(double * new_c, double * old_c, bool *
   }
 }
 
-double * copy_data(double * original, options_t args)
+float * copy_data(float * original, options_t args)
 {
-  double * copy = (double *) malloc(args.num_cluster * args.dims * sizeof(double));
+  float * copy = (float *) malloc(args.num_cluster * args.dims * sizeof(float));
 
   for (int i =0; i < args.num_cluster * args.dims; i++){
     copy[i] = original[i];

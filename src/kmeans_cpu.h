@@ -1,8 +1,8 @@
 #include "argparse.h"
 
-void kmeans_cpu(double * dataset, double * centroids, options_t &args);
-int * find_nearest_centroids(double * dataset, double * centroids, options_t &args);
-double * average_labeled_centroids(double * dataset, int * labels, options_t &args);
-bool converged(double * new_centroids, double* old_centroids, options_t &args);
-double eucledian_distance(double * first, double * first_end, double * second,double * second_end, int dimensions);
-double * seq_copy(double * original, options_t args);
+void kmeans_cpu(float * dataset, float * centroids, options_t &args);
+int * find_nearest_centroids(float * dataset, float * centroids, options_t &args);
+float * average_labeled_centroids(float * dataset, int * labels, options_t &args);
+bool converged(float * new_centroids, float* old_centroids, options_t &args);
+float eucledian_distance(float * first, float * first_end, float * second,float * second_end, int dimensions);
+float * seq_copy(float * original, options_t args);

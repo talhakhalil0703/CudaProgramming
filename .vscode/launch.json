@@ -23,7 +23,7 @@
                 "-s",
                 "8675309",
                 "-c",
-                "-p"
+                "--use_cuda_basic"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

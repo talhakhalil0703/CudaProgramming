@@ -1,12 +1,12 @@
 #include "argparse.h"
 
-void kmeans_thrust(double *dataset, double * centroids, options_t &args);
+void kmeans_thrust(float *dataset, float * centroids, options_t &args);
 
-bool thrust_converged(double * new_centroids, double* old_centroids, options_t &args, double * duration);
-__global__ void thrust_convergence_helper(double * new_c, double * old_c, bool * convergence, double threshold, int dimensions);
-int * thrust_find_nearest_centroids(double * dataset, double * centroids, options_t &args, double * duration);
-__global__ void thrust_find_nearest_centroids_helper(double * dataset, double * centroids, int * labels, int dims, double max);
-double * thrust_average_labeled_centroids(double * dataset, int * labels, options_t &args, double * duration);
-__global__ void thrust_average_labeled_centroids_helper(double * d_dataset, int * d_labels, double * centroids, int number_of_values);
+bool thrust_converged(float * new_centroids, float* old_centroids, options_t &args, float * duration);
+__global__ void thrust_convergence_helper(float * new_c, float * old_c, bool * convergence, float threshold, int dimensions);
+int * thrust_find_nearest_centroids(float * dataset, float * centroids, options_t &args, float * duration);
+__global__ void thrust_find_nearest_centroids_helper(float * dataset, float * centroids, int * labels, int dims, float max);
+float * thrust_average_labeled_centroids(float * dataset, int * labels, options_t &args, float * duration);
+__global__ void thrust_average_labeled_centroids_helper(float * d_dataset, int * d_labels, float * centroids, int number_of_values);
 
-double * copy_data(double * original, options_t args);
+float * copy_data(float * original, options_t args);

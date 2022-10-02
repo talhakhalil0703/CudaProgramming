@@ -222,7 +222,6 @@ bool cuda_converged(float * d_new_centroids, float* d_old_centroids, options_t &
 
   d_cuda_convergence_helper<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS)>>>(d_new_centroids, d_old_centroids, d_intermediate_values, args.dims, args.num_cluster);
   cudaEventRecord(stop_t);
-  
   cudaDeviceSynchronize();
   // float total_time = 0;
   // cudaEventElapsedTime(&total_time, start_t, stop_t);

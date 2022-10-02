@@ -4,13 +4,13 @@ from sys import stdout
 from unittest import TextTestResult
 
 ITERATION_LIMIT = 150
-CONVERGENCE_THRESHOLD = 0.000001
+CONVERGENCE_THRESHOLD = 0.00001
 SEED = 8675309
 GRADER_THRESHOLD = 0.0001100000001 # floating point errors
 EXEC = "./bin/kmeans"
 RUNS = 5
 
-METHODS = ["--use_cuda_basic", "--use_cuda_shared"]
+METHODS = ["--use_cuda_basic"]
 
 INPUT_ANSWERS_FILES = ["input/random-n2048-d16-c16-answer.txt", "input/random-n16384-d24-c16-answer.txt", "input/random-n65536-d32-c16-answer.txt"]
 INPUT_FILES = ["input/random-n2048-d16-c16.txt", "input/random-n16384-d24-c16.txt", "input/random-n65536-d32-c16.txt"]
@@ -22,10 +22,10 @@ def main():
     for method in METHODS:
         for input,dims,answer in zip(INPUT_FILES, DIMS,  INPUT_ANSWERS_FILES):
             timing = 0
+            match = True
             for run in range(0, RUNS):
                 command_to_run = f"{EXEC} -k 16 -d {dims} -i {input} -m {ITERATION_LIMIT} -t {CONVERGENCE_THRESHOLD} -s {SEED} {method}"
                 p = subprocess.getoutput([command_to_run])
-                match = True
                 cluster = []
                 with open(f"{answer}", "r") as f:
                     for point in f.readlines():

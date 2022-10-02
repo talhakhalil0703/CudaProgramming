@@ -109,7 +109,7 @@ __global__ void d_cuda_find_nearest_centroids(float * dataset, float * centroids
     for (int i = 0; i < num_cluster; i++){
       current_distance = 0;
       for (int j =0 ; j < dims; j++){
-        current_distance += powf(dataset[index*dims + j] - centroids[i*dims + j], 2.0);
+        current_distance += (dataset[index*dims + j] - centroids[i*dims + j]) * (dataset[index*dims + j] - centroids[i*dims + j]);
       }
       current_distance = sqrtf(current_distance);
       if (current_distance < shortest_distance){
@@ -270,7 +270,7 @@ bool cuda_converged(float * d_new_centroids, float* d_old_centroids, options_t &
 __global__ void d_cuda_convergence_helper(float * new_c, float * old_c, float * temp, int dimensions, int num_cluster){
   int index = threadIdx.x + blockIdx.x * blockDim.x;
   if (index < dimensions * num_cluster){
-    atomicAdd(&temp[index/dimensions], (float)powf( new_c[index] - old_c[index], 2.0));
+    atomicAdd(&temp[index/dimensions], (new_c[index] - old_c[index])*(new_c[index] - old_c[index]));
   }
 }
 

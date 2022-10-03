@@ -112,11 +112,10 @@ float eucledian_distance(float * first_start, float * first_end, float * second_
   float * first_tracker = first_start;
   float * second_tracker = second_start;
   for (;first_tracker != first_end; first_tracker++, second_tracker++){
-    sum += pow(*first_tracker-*second_tracker, 2.0);
+    sum += (*first_tracker-*second_tracker)*(*first_tracker-*second_tracker);
   }
-  // sum += pow(first_end-second_end, 2.0);
 
-  return sqrt(sum);
+  return sqrtf(sum);
 }
 
 float * seq_copy(float * original, options_t args)

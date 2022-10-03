@@ -24,7 +24,7 @@ def main():
             timing = 0
             match = True
             for run in range(0, RUNS):
-                command_to_run = f"{EXEC} -k 16 -d {dims} -i {input} -m {ITERATION_LIMIT} -t {CONVERGENCE_THRESHOLD} -s {SEED} {method}"
+                command_to_run = f"{EXEC} -k 16 -d {dims} -i {input} -m {ITERATION_LIMIT} -t {CONVERGENCE_THRESHOLD} -s {SEED} {method} -c"
                 p = subprocess.getoutput([command_to_run])
                 cluster = []
                 with open(f"{answer}", "r") as f:

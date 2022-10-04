@@ -1,13 +1,11 @@
 #include "kmeans_cuda_basic.h"
 #include "random.h"
 #include "io.h"
-// #include <cmath>
 #include <limits>
 #include <chrono>
 #include <math.h>
 
 #define NUMBER_OF_THREADS 1024
-#define PRINT_TIMES
 
 void kmeans_cuda_basic(float *dataset, float * centroids, options_t &args) {
   int iterations = 0;
@@ -281,15 +279,4 @@ __global__ void d_cuda_convergence_helper_threshold(float * temp, int * converge
       atomicAdd(converged, 1);
     }
   }
-}
-
-float * cuda_copy(float * original, options_t args)
-{
-  float * copy = (float *) malloc(args.num_cluster * args.dims * sizeof(float));
-
-  for (int i =0; i < args.num_cluster * args.dims; i++){
-    copy[i] = original[i];
-  }
-
-  return copy;
 }

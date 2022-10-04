@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 import subprocess
-from sys import stdout
-from unittest import TextTestResult
 
 ITERATION_LIMIT = 150
-CONVERGENCE_THRESHOLD = 0.00001
+CONVERGENCE_THRESHOLD = 1e-5
 SEED = 8675309
-GRADER_THRESHOLD = 0.0001100000001 # floating point errors
+GRADER_THRESHOLD = 1e-4 # floating point errors
 EXEC = "./bin/kmeans"
 RUNS = 5
 
-METHODS = ["--use_cuda_basic"]
+METHODS = ["--use_cuda_basic", "--use_cuda_shared"]
+# METHODS = ["--use_cuda_shared"]
 
 INPUT_ANSWERS_FILES = ["input/random-n2048-d16-c16-answer.txt", "input/random-n16384-d24-c16-answer.txt", "input/random-n65536-d32-c16-answer.txt"]
 INPUT_FILES = ["input/random-n2048-d16-c16.txt", "input/random-n16384-d24-c16.txt", "input/random-n65536-d32-c16.txt"]
 DIMS = [16, 24, 32]
-
+# INPUT_ANSWERS_FILES = ["input/random-n2048-d16-c16-answer.txt"]
+# INPUT_FILES = ["input/random-n2048-d16-c16.txt"]
+# DIMS = [16]
 
 def main():
     # This test file is called by make, so it does not need to make...

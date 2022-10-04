@@ -1,33 +1,32 @@
 #include "kmeans_cuda_shared.h"
 #include "random.h"
 #include "io.h"
-// #include <cmath>
 #include <limits>
 #include <chrono>
 #include <math.h>
 
-__device__ float shared_atomicMin_d(float* address, float val)
-{
-    int* address_as_ull = (int*)address;
-    int old = *address_as_ull, assumed;
-    do {
-        assumed = atomicMin(address_as_ull, __float_as_int(val));
-        old = atomicCAS(address_as_ull, old, assumed);
+#define NUMBER_OF_THREADS 1024
 
-    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
-    } while (assumed != old);
-
-    return __int_as_float(old);
-}
-
-void kmeans_cuda_shared(float * dataset, float * centroids, options_t &args) {
-
+void kmeans_cuda_shared(float *dataset, float * centroids, options_t &args) {
   int iterations = 0;
-  float * old_centroids = NULL;
   bool done = false;
-  int * labels;
   float duration_total = 0;
   float duration = 0;
+
+  int * d_labels;
+  cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
+  cudaMemset(d_labels, 0, args.number_of_values * sizeof(int)); // Should start from zero?
+
+  float * d_dataset;
+  cudaMalloc((void**)&d_dataset, args.number_of_values * args.dims * sizeof(float));
+  cudaMemcpy(d_dataset, dataset, args.number_of_values * args.dims * sizeof(float), cudaMemcpyHostToDevice);
+
+  float * d_centroids;
+  cudaMalloc((void**)&d_centroids, args.num_cluster * args.dims * sizeof(float));
+  cudaMemcpy(d_centroids, centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyHostToDevice);
+
+  float * old_centroids;
+  cudaMalloc((void**)&old_centroids, args.num_cluster * args.dims * sizeof(float));
 
   cudaEvent_t start_t, stop_t;
   cudaEventCreate(&start_t);
@@ -38,262 +37,289 @@ void kmeans_cuda_shared(float * dataset, float * centroids, options_t &args) {
     //copy
     duration = 0;
 
-    old_centroids = cuda_shared_copy(centroids, args);
+    cudaMemcpy(old_centroids, d_centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyDeviceToDevice);
 
     iterations++;
 
     //labels is a mapping from each point in the dataset to the enarest euclidian distance centroid
-    labels = cuda_shared_find_nearest_centroids(dataset, centroids, args, &duration);
-
-    // Print Labels
-    // for (int i =0 ; i< args.number_of_values; i++){
-    //   std::cout << i << ": " << labels[i] << std::endl;
-    // }
+    cuda_shared_find_nearest_centroids(d_dataset, d_labels, d_centroids, args);
 
     //the new centroids are the average of all points that map to each centroid
-    centroids = cuda_shared_average_labeled_centroids(dataset, labels, args, &duration);
+    cuda_shared_average_labeled_centroids(d_centroids, d_dataset, d_labels, args);
 
-    done = iterations > args.max_num_iter || cuda_shared_converged(centroids, old_centroids, args, &duration);
+    done = iterations > args.max_num_iter || cuda_shared_converged(d_centroids, old_centroids, args);
 
     duration_total += duration;
-    free(old_centroids);
-    // free labels, only if not done
-    if (!done) free (labels);
   }
-
   cudaEventRecord(stop_t);
   cudaDeviceSynchronize();
 
-  float ms = 0;
-  cudaEventElapsedTime(&ms, start_t, stop_t);
+  float total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
 
-  printf("%d,%lf\n", iterations, ms/iterations);
+  printf("%d,%f\n", iterations, total_time/iterations);
+
+  int * labels;
+  labels = (int *) malloc(args.number_of_values*sizeof(int));
+  cudaMemcpy(labels, d_labels, args.number_of_values*sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpy(centroids,d_centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyDeviceToHost);
+
+  cudaFree(old_centroids);
+  cudaFree(d_labels);
+  cudaFree(d_centroids);
+  cudaFree(d_dataset);
 
   args.labels = labels;
   args.centroids = centroids;
 }
 
-int * cuda_shared_find_nearest_centroids(float * h_dataset, float * h_centroids, options_t &args, float * duration){
-  //Timing
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
-
-  int * h_labels = (int *)malloc(args.number_of_values * sizeof(int));
-
-  //Allocate Device Memory
-  float * d_dataset;
-  float * d_centroids;
-  int * d_labels;
-
-  cudaMalloc((void**)&d_dataset, args.dims*args.number_of_values*sizeof(float));
-  cudaMalloc((void**)&d_centroids, args.dims*args.num_cluster*sizeof(float));
-  cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
-
-  // Transfer Memory from Host to Device
-  cudaMemcpy(d_dataset, h_dataset, args.dims*args.number_of_values*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_centroids, h_centroids, args.dims*args.num_cluster*sizeof(float), cudaMemcpyHostToDevice);
-
+void cuda_shared_find_nearest_centroids(float * d_dataset, int * d_labels, float * d_centroids, options_t &args){
   //Launch the kernel
-  cudaEventRecord(start);
-  d_cuda_shared_find_nearest_centroids<<<dim3(args.number_of_values), dim3(args.num_cluster)>>>(d_dataset, d_centroids, d_labels, args.dims, std::numeric_limits<float>::max());
-  cudaEventRecord(stop);
-
-  float ms = 0;
-  cudaEventElapsedTime(&ms, start, stop);
-  *duration += ms;
-
+  cudaEvent_t start_t, stop_t;
+  cudaEventCreate(&start_t);
+  cudaEventCreate(&stop_t);
+  int num_blocks = args.number_of_values/NUMBER_OF_THREADS;
+  if (num_blocks == 0) num_blocks = 1;
+  cudaEventRecord(start_t);
+  d_cuda_shared_find_nearest_centroids<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS), args.dims*args.num_cluster*sizeof(float)>>>(d_dataset, d_centroids, d_labels, args.dims, args.num_cluster, std::numeric_limits<float>::max(), args.number_of_values);
   //Sync
+  cudaEventRecord(stop_t);
   cudaDeviceSynchronize();
+  // check for error
+  cudaError_t error = cudaGetLastError();
+  if(error != cudaSuccess)
+  {
+    // print the CUDA error message and exit
+    printf("CUDA error: %s\n", cudaGetErrorString(error));
+    exit(-1);
+  }
 
-  // Copy Memory back from Device to Host
-  cudaMemcpy(h_labels, d_labels, args.number_of_values*sizeof(int), cudaMemcpyDeviceToHost);
+  #ifdef PRINT_TIMES
+    float total_time = 0;
+    cudaEventElapsedTime(&total_time, start_t, stop_t);
+    std::cout << "find_nearest_centroids: " << total_time << std::endl;
+  #endif
 
-  //Free Device Memory
-  cudaFree(d_dataset);
-  cudaFree(d_centroids);
-  cudaFree(d_labels);
-
-  return h_labels;
 }
 
-__global__ void d_cuda_shared_find_nearest_centroids(float * dataset, float * centroids, int * labels, int dims, float max){
-  __shared__ float s_distance;
-  s_distance = max;
 
+__global__ void d_cuda_shared_find_nearest_centroids(float * dataset, float * centroids, int * labels, int dims, int num_cluster, float max, int number_of_values){
+  int index = threadIdx.x + blockIdx.x * blockDim.x;
+  // Centroids all can be copied willy-nilly
+  extern __shared__ float s_centroids[];
+  // I don't see a point where dims*num_cluster > NUMBER_OF_THREADS, if that happens don't so shared
+  if (threadIdx.x < dims*num_cluster){
+    s_centroids[threadIdx.x] = centroids[threadIdx.x];
+  }
 
   __syncthreads();
+  //Labels don't have to be copied here because they are only accessed once for writing
 
-  if (threadIdx.x < blockDim.x){
-    float distance = 0;
-    for (int i = 0; i < dims; i++ ){
-      // Centroid indexing is different from the indexing of the data set!
-      // This needs to be looked into further, when you look at this next write out pseudo code first
-      // My thinking was that each <<<block, threads>>> each block would find the label for each point,
-      // Where each thread would find the distance for point vs centroid, the block would sync and choose
-      // lowest point to assign the label as.
-      // In this case the starting index of the centroids is independent of what block you are in
-      distance += powf( dataset[blockIdx.x * dims + i] - centroids[threadIdx.x * dims + i], 2.0);
-    }
-    // At this point now each thread has caluclated their own distance, this should now be stored somewhere linked to said thread
-    // Threads is mapped to the cluster
-    distance = sqrtf(distance);
-    shared_atomicMin_d(&s_distance, distance);
-    __syncthreads();
+  // Each thread is given a point and for each point we want to find the closest centroid.
 
-    if (distance == s_distance){
-      labels[blockIdx.x] = threadIdx.x;
+  // Ensure that the point is actually a point that exists
+  if (index <  number_of_values){
+    float shortest_distance = max;
+    float current_distance = 0;
+    int closest_index = 0;
+
+    for (int i = 0; i < num_cluster; i++){
+      current_distance = 0;
+      for (int j =0 ; j < dims; j++){
+        current_distance += (dataset[index*dims + j] - s_centroids[i*dims + j]) * (dataset[index*dims + j] - s_centroids[i*dims + j]);
+      }
+      current_distance = sqrtf(current_distance);
+      if (current_distance < shortest_distance){
+        shortest_distance = current_distance;
+        closest_index = i;
+      }
     }
+
+    labels[index] = closest_index;
   }
 }
-float * cuda_shared_average_labeled_centroids(float * h_dataset, int * h_labels, options_t &args, float * duration){
-  //Timing
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
 
-  // First turn the dataset into a singular dimension
-  float * h_centroids = (float *)malloc(args.num_cluster * args.dims * sizeof(float));
-
+void cuda_shared_average_labeled_centroids(float * d_centroids, float * d_dataset, int * d_labels, options_t &args){
   // Allocate Device Memory
-  float * d_dataset;
-  int * d_labels;
-  float * d_centroids;
-  cudaMalloc((void**)&d_dataset, args.number_of_values * args.dims * sizeof(float));
-  cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
-  cudaMalloc((void**)&d_centroids, args.num_cluster * args.dims * sizeof(float));
+  cudaEvent_t start_t, stop_t;
+  cudaEventCreate(&start_t);
+  cudaEventCreate(&stop_t);
+
+  int * d_points_in_centroids;
+  cudaMalloc ((void **)&d_points_in_centroids, args.num_cluster*sizeof(int));
 
   // Transfer Memory From Host To Device
-  cudaMemcpy(d_dataset, h_dataset, args.number_of_values * args.dims * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_labels, h_labels, args.number_of_values * sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_centroids, 0, args.num_cluster * args.dims * sizeof(float), cudaMemcpyHostToDevice); // Should start from zero?
 
+  cudaMemset(d_points_in_centroids, 0, args.num_cluster * sizeof(int)); // Should start from zero?
+  cudaMemset(d_centroids, 0, args.num_cluster * args.dims * sizeof(float)); // Should start from zero?
   // Launch the kernel
-  cudaEventRecord(start);
-  d_cuda_shared_average_labeled_centroids<<<dim3(args.num_cluster), dim3(args.dims)>>>(d_dataset, d_labels, d_centroids, args.number_of_values);
-  cudaEventRecord(stop);
+  int num_blocks = args.number_of_values/NUMBER_OF_THREADS;
+  if (num_blocks == 0) num_blocks = 1;
+  cudaEventCreate(&start_t);
+
+  d_cuda_shared_average_labeled_centroids<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS), args.dims*args.num_cluster*sizeof(float)>>>(d_dataset, d_labels, d_points_in_centroids, d_centroids, args.number_of_values, args.dims, args.num_cluster);
 
   // Sync
+  cudaEventRecord(stop_t);
   cudaDeviceSynchronize();
-  // Copy Memory back from Device to Host
-  cudaMemcpy(h_centroids, d_centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyDeviceToHost);
-  // Free Device Memory
-  cudaFree(d_dataset);
-  cudaFree(d_labels);
-  cudaFree(d_centroids);
+  #ifdef PRINT_TIMES
+  float total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
+  std::cout << "averaged_labeled_centroids: " << total_time << std::endl;
+  #endif
+  num_blocks = args.num_cluster*args.dims/NUMBER_OF_THREADS;
+  if (num_blocks == 0) num_blocks = 1;
+  cudaEventCreate(&start_t);
+  d_cuda_shared_average_labeled_centroids_divide<<<num_blocks,NUMBER_OF_THREADS>>>(d_centroids, d_points_in_centroids, args.dims, args.num_cluster);
+  // Sync
+  cudaEventRecord(stop_t);
 
-  float ms = 0;
-  cudaEventElapsedTime(&ms, start, stop);
-  *duration += ms;
-  return h_centroids;
+  cudaDeviceSynchronize();
+  #ifdef PRINT_TIMES
+  total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
+  std::cout << "averaged_labeled_centroids 3: " << total_time << std::endl;
+  #endif
+
+  // Free Device Memory
+  cudaFree(d_points_in_centroids);
+
 }
 
-__global__ void d_cuda_shared_average_labeled_centroids(float * d_dataset, int * d_labels, float * centroids, int number_of_values){
-  // Dimensions is blockDim.x
-  // A block here manages the centroid Id
-  // A thread here manages the addition it needs to do for that dimension
-  int points = 0;
-  // First loop through  d_dataset skipping dim[blockDim.x] times, and check if the value here is equal to our block id
-  for (int i = 0; i < number_of_values; i ++) {
-    if (d_labels[i] == blockIdx.x) {
-      points++;
-      centroids[blockIdx.x * blockDim.x + threadIdx.x] += d_dataset[i * blockDim.x + threadIdx.x];
+__global__ void d_cuda_shared_average_labeled_centroids(float * dataset, int * labels, int * points_in_centroids, float * centroids, int number_of_values, int dims, int num_cluster){
+  // Unique index for each point
+  int index = threadIdx.x + blockIdx.x * blockDim.x;
+  // Labels is read once no real performan to be gained here, centroids could be....
+  // Centroids all can be copied willy-nilly
+  extern __shared__ float s_centroids[];
+  // I don't see a point where dims*num_cluster > NUMBER_OF_THREADS, if that happens don't do shared
+  //Check to ensure that the index is actually less than the total number of values we have
+  if (index <  number_of_values) {
+    // At the start zero the shared memory, just as the global memory has been
+    if (threadIdx.x < dims*num_cluster){
+      s_centroids[threadIdx.x] = 0;
+    }
+
+    __syncthreads();
+
+    //Get the centroid that the point belongs to.
+    int centroid_index = labels[index];
+
+    //Increment the count of points that centroid contains.
+    atomicAdd(&points_in_centroids[centroid_index], 1);
+
+    //Increment that centroids dims with that point
+    for (int i = 0 ; i < dims;  i++){
+      atomicAdd(&s_centroids[centroid_index*dims + i], dataset[index*dims+i]);
+    }
+
+    __syncthreads();
+
+    // I need to write the memory back
+    if (threadIdx.x < dims*num_cluster){
+      atomicAdd(&centroids[threadIdx.x], s_centroids[threadIdx.x] );
     }
   }
-
-  if (points != 0){
-    centroids[blockIdx.x * blockDim.x + threadIdx.x] /= points;
-  }
-
-  //Once you have done the addition for all
-
 }
 
+__global__ void d_cuda_shared_average_labeled_centroids_divide(float * centroids, int * points_in_centroids, int dims, int num_cluster){
+  int index = threadIdx.x + blockIdx.x * blockDim.x;
+   if (index < dims*num_cluster) {
+    //For each centroid divide it's dimensions with the amount of points present.
+    //We can store this value
+    int points_in_centroid = points_in_centroids[index/dims];
 
-bool cuda_shared_converged(float * h_new_centroids, float* h_old_centroids, options_t &args, float * duration) {
+    centroids[index] /= points_in_centroid;
+   }
+}
 
-  //Timing
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
+bool cuda_shared_converged(float * d_new_centroids, float* d_old_centroids, options_t &args) {
 
-  bool * h_convergence = (bool *)malloc(args.num_cluster * sizeof(float));
+  int * h_converged = (int *) malloc(sizeof(int));
+
+  // Allocate Device Memory
+  cudaEvent_t start_t, stop_t;
+  cudaEventCreate(&start_t);
+  cudaEventCreate(&stop_t);
 
   //Allocate Device Memory
-  float * d_new_centroids;
-  float * d_old_centroids;
-  bool * d_convergence;
+  float * d_intermediate_values;
+  int * d_converged;
 
-  cudaMalloc((void**)&d_new_centroids, args.dims*args.num_cluster*sizeof(float));
-  cudaMalloc((void**)&d_old_centroids, args.dims*args.num_cluster*sizeof(float));
-  cudaMalloc((void**)&d_convergence, args.num_cluster*sizeof(bool));
+  cudaMalloc((void**)&d_intermediate_values, args.num_cluster*sizeof(float));
+  cudaMalloc((void**)&d_converged, sizeof(int));
 
   // Transfer Memory from Host to Device
-  cudaMemcpy(d_new_centroids, h_new_centroids, args.dims*args.num_cluster*sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_old_centroids, h_old_centroids, args.dims*args.num_cluster*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemset(d_intermediate_values, 0, args.num_cluster * sizeof(float)); // Should start from zero?
+  cudaMemset(d_converged, 0, sizeof(int)); // Should start from zero?
 
-  cudaEventRecord(start);
-  d_cuda_shared_convergence_helper<<<dim3(args.num_cluster), dim3(args.dims)>>>(d_new_centroids, d_old_centroids, d_convergence, args.threshold, args.dims);
-  cudaEventRecord(stop);
+  int num_blocks = args.num_cluster*args.dims/NUMBER_OF_THREADS;
+  if (num_blocks == 0) num_blocks = 1;
+  cudaEventRecord(start_t);
 
-  //Sync
+  d_cuda_shared_convergence_helper<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS)>>>(d_new_centroids, d_old_centroids, d_intermediate_values, args.dims, args.num_cluster);
+  cudaEventRecord(stop_t);
   cudaDeviceSynchronize();
 
+  #ifdef PRINT_TIMES
+  float total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
+  std::cout << "cuda_converged: " << total_time << std::endl;
+  num_blocks = args.num_cluster/NUMBER_OF_THREADS;
+  #endif
+  if (num_blocks == 0) num_blocks = 1;
+  cudaEventRecord(start_t);
+
+  d_cuda_shared_convergence_helper_threshold<<<num_blocks, NUMBER_OF_THREADS>>>(d_intermediate_values, d_converged, args.num_cluster, args.threshold);
+  cudaEventRecord(stop_t);
+
+  cudaDeviceSynchronize();
+  #ifdef PRINT_TIMES
+
+  total_time = 0;
+  cudaEventElapsedTime(&total_time, start_t, stop_t);
+  std::cout << "cuda_converged 2: " << total_time << std::endl;
+  #endif
   // Copy Memory back from Device to Host
-  cudaMemcpy(h_convergence, d_convergence, args.num_cluster*sizeof(bool), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_converged, d_converged, sizeof(int), cudaMemcpyDeviceToHost);
 
   bool converged = true;
-
-  for (int i =0; i < args.num_cluster; i++){
-    if (!h_convergence[i]) {
-      converged = false;
-      break;
-    }
+  if (*h_converged != 0){
+    converged = false;
   }
 
   // Free Device Memory
-  cudaFree(d_new_centroids);
-  cudaFree(d_old_centroids);
-  cudaFree(d_convergence);
+  cudaFree(d_intermediate_values);
+  cudaFree(d_converged);
 
   // Free Host Memory
-  free(h_convergence);
-  float ms = 0;
-  cudaEventElapsedTime(&ms, start, stop);
-  *duration += ms;
+  free(h_converged);
   // Check if each of the centroid has moved less than the threshold provided.
   return converged;
 }
 
-__global__ void d_cuda_shared_convergence_helper(float * new_c, float * old_c, bool * convergence, float threshold, int dimensions){
+__global__ void d_cuda_shared_convergence_helper(float * new_c, float * old_c, float * temp, int dimensions, int num_cluster){
   int index = threadIdx.x + blockIdx.x * blockDim.x;
-  __shared__ float distance;
-  distance = 0;
-
-  if (threadIdx.x < dimensions){
-    atomicAdd(&distance, (float)powf( new_c[index] - old_c[index], 2.0));
-  }
-
-  __syncthreads();
-
-  // It looks like here maybe we could make use of __atomic_add, would that make a speedup? Not noticeable enough
-
-  if (threadIdx.x == 0) {
-    if (threshold < sqrtf(distance)){
-      convergence[blockIdx.x] = false;
-    } else {
-      convergence[blockIdx.x] = true;
-    }
+  if (index < dimensions * num_cluster){
+    atomicAdd(&temp[index/dimensions], (new_c[index] - old_c[index])*(new_c[index] - old_c[index]));
   }
 }
 
-float * cuda_shared_copy(float * original, options_t args)
-{
-  float * copy = (float *) malloc(args.num_cluster * args.dims * sizeof(float));
-
-  for (int i =0; i < args.num_cluster * args.dims; i++){
-    copy[i] = original[i];
+__global__ void d_cuda_shared_convergence_helper_threshold(float * temp, int * converged, int num_cluster, float threshold){
+  int index = threadIdx.x + blockIdx.x * blockDim.x;
+  __shared__ int s_converged;
+  if (index == 0){
+    s_converged = 0;
+  }
+  __syncthreads();
+  if (index < num_cluster){
+    if (threshold < sqrtf(temp[index])){
+      atomicAdd(&s_converged, 1);
+    }
+  }
+  __syncthreads();
+  if (index == 0 && s_converged > 0){
+    *converged = s_converged;
   }
 
-  return copy;
 }

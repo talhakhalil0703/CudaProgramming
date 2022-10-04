@@ -62,7 +62,7 @@
 # Specification for sequential implementation of kmeans
 #
 [Sequential]
-How_To_Compile: nvcc main.cpp kmeans_cpu.cpp kmeans_cuda.cu kmeans_thrust.cpp -O2 -o bin/kmeans
+How_To_Compile: make
 Executable: bin/kmeans
 Extra_Args: --use_cpu
 
@@ -71,33 +71,24 @@ Extra_Args: --use_cpu
 # using Thrust
 #
 [Thrust]
-How_To_Compile:
-Executable:
-Extra_Args:
+How_To_Compile: make
+Executable: bin/kmeans
+Extra_Args: --use_thrust
 
 #
 # Specification for GPU implementation of kmeans
 # using CUDA
 #
 [CUDA basic]
-How_To_Compile:
-Executable:
-Extra_Args:
+How_To_Compile: make
+Executable: bin/kmeans
+Extra_Args: --use_cuda_basic
 
 #
 # Specification for GPU implementation of kmeans
 # using Shared Memory
 #
 [CUDA shared]
-How_To_Compile:
-Executable:
-Extra_Args:
-
-#
-# Specification for GPU implementation of kmeans
-# Alternatives
-#
-[Alternatives]
-How_To_Compile:
-Executable:
-Extra_Args:
+How_To_Compile: make
+Executable: bin/kmeans
+Extra_Args: --use_cuda_shared

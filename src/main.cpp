@@ -43,6 +43,8 @@ int main(int argc, char **argv)
         kmeans_thrust(vals, centroids, opts);
     }
 
+    if (!opts.use_thrust){
+
     if (!opts.c){
         printf("clusters:");
         for (int p=0; p < opts.number_of_values; p++) {
@@ -56,6 +58,7 @@ int main(int argc, char **argv)
             }
             printf("\n");
         }
+    }
     }
     free(vals);
 }

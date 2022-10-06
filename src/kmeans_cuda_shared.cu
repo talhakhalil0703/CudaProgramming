@@ -206,10 +206,23 @@ void cuda_shared_average_labeled_centroids(float * d_centroids, float * d_datase
   cudaEventCreate(&mem_stop);
   #endif
 
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
   int * d_points_in_centroids;
   cudaMalloc ((void **)&d_points_in_centroids, args.num_cluster*sizeof(int));
 
   // Transfer Memory From Host To Device
+  
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
 
   #ifdef PRINT_TIMES
   cudaEventRecord(mem_start);
@@ -339,9 +352,22 @@ bool cuda_shared_converged(float * d_new_centroids, float* d_old_centroids, opti
   //Allocate Device Memory
   float * d_intermediate_values;
   int * d_converged;
-
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
+  
   cudaMalloc((void**)&d_intermediate_values, args.num_cluster*sizeof(float));
   cudaMalloc((void**)&d_converged, sizeof(int));
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
 
   #ifdef PRINT_TIMES
   cudaEventRecord(mem_start);

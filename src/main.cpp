@@ -9,7 +9,6 @@
 #include "kmeans_thrust.h"
 #include "kmeans_cpu.h"
 
-#define PRINT_TIMES
 
 using namespace std;
 

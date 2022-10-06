@@ -8,7 +8,7 @@ GRADER_THRESHOLD = 1e-4 # floating point errors
 EXEC = "./bin/kmeans"
 RUNS = 5
 
-METHODS = ["--use_cuda_basic", "--use_cuda_shared"]
+METHODS = ["--use_cuda_basic", "--use_cuda_shared", "--use_cpu"]
 # METHODS = ["--use_cuda_shared"]
 
 INPUT_ANSWERS_FILES = ["input/random-n2048-d16-c16-answer.txt", "input/random-n16384-d24-c16-answer.txt", "input/random-n65536-d32-c16-answer.txt"]

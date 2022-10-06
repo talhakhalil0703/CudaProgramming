@@ -5,7 +5,6 @@
 #include <chrono>
 #include <math.h>
 
-#define PRINT_TIMES
 #define NUMBER_OF_THREADS 1024
 
 #ifdef PRINT_TIMES

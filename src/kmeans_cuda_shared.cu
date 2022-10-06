@@ -6,7 +6,6 @@
 #include <math.h>
 
 #define NUMBER_OF_THREADS 1024
-#define PRINT_TIMES
 
 #ifdef PRINT_TIMES
 static float mem_time = 0;
@@ -115,10 +114,28 @@ void kmeans_cuda_shared(float *dataset, float * centroids, options_t &args) {
   }
   #endif
 
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
+
   cudaFree(old_centroids);
   cudaFree(d_labels);
   cudaFree(d_centroids);
   cudaFree(d_dataset);
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
+
+  #ifdef PRINT_TIMES
+  printf("Time spent copying memory: %lf\n", mem_time);
+  #endif
 
   args.labels = labels;
   args.centroids = centroids;
@@ -283,8 +300,22 @@ void cuda_shared_average_labeled_centroids(float * d_centroids, float * d_datase
   std::cout << "averaged_labeled_centroids 3: " << total_time << std::endl;
   #endif
 
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
+
   // Free Device Memory
   cudaFree(d_points_in_centroids);
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
 
 }
 
@@ -450,12 +481,27 @@ bool cuda_shared_converged(float * d_new_centroids, float* d_old_centroids, opti
     converged = false;
   }
 
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
+  
   // Free Device Memory
   cudaFree(d_intermediate_values);
   cudaFree(d_converged);
 
   // Free Host Memory
   free(h_converged);
+  
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
+
   // Check if each of the centroid has moved less than the threshold provided.
   return converged;
 }

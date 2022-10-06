@@ -6,12 +6,24 @@
 #include <math.h>
 
 #define NUMBER_OF_THREADS 1024
+#define PRINT_TIMES
+
+#ifdef PRINT_TIMES
+static float mem_time = 0;
+#endif
 
 void kmeans_cuda_shared(float *dataset, float * centroids, options_t &args) {
   int iterations = 0;
   bool done = false;
   float duration_total = 0;
   float duration = 0;
+
+  #ifdef PRINT_TIMES
+  cudaEvent_t mem_start, mem_stop;
+  cudaEventCreate(&mem_start);
+  cudaEventCreate(&mem_stop);
+  cudaEventRecord(mem_start);
+  #endif
 
   int * d_labels;
   cudaMalloc((void**)&d_labels, args.number_of_values * sizeof(int));
@@ -28,6 +40,16 @@ void kmeans_cuda_shared(float *dataset, float * centroids, options_t &args) {
   float * old_centroids;
   cudaMalloc((void**)&old_centroids, args.num_cluster * args.dims * sizeof(float));
 
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
+
   cudaEvent_t start_t, stop_t;
   cudaEventCreate(&start_t);
   cudaEventCreate(&stop_t);
@@ -37,7 +59,21 @@ void kmeans_cuda_shared(float *dataset, float * centroids, options_t &args) {
     //copy
     duration = 0;
 
+    #ifdef PRINT_TIMES
+    cudaEventRecord(mem_start);
+    #endif
+
     cudaMemcpy(old_centroids, d_centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyDeviceToDevice);
+
+    #ifdef PRINT_TIMES
+    cudaEventRecord(mem_stop);
+    cudaDeviceSynchronize();
+    {
+      float temp =  0;
+      cudaEventElapsedTime(&temp, mem_start, mem_stop);
+      mem_time += temp;
+    }
+    #endif
 
     iterations++;
 
@@ -61,8 +97,23 @@ void kmeans_cuda_shared(float *dataset, float * centroids, options_t &args) {
 
   int * labels;
   labels = (int *) malloc(args.number_of_values*sizeof(int));
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
+
   cudaMemcpy(labels, d_labels, args.number_of_values*sizeof(int), cudaMemcpyDeviceToHost);
   cudaMemcpy(centroids,d_centroids, args.num_cluster * args.dims * sizeof(float), cudaMemcpyDeviceToHost);
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
 
   cudaFree(old_centroids);
   cudaFree(d_labels);
@@ -74,25 +125,29 @@ void kmeans_cuda_shared(float *dataset, float * centroids, options_t &args) {
 }
 
 void cuda_shared_find_nearest_centroids(float * d_dataset, int * d_labels, float * d_centroids, options_t &args){
+
+  #ifdef PRINT_TIMES
   //Launch the kernel
   cudaEvent_t start_t, stop_t;
   cudaEventCreate(&start_t);
   cudaEventCreate(&stop_t);
+  #endif
+
   int num_blocks = args.number_of_values/NUMBER_OF_THREADS;
   if (num_blocks == 0) num_blocks = 1;
+
+  #ifdef PRINT_TIMES
   cudaEventRecord(start_t);
+  #endif
+
   d_cuda_shared_find_nearest_centroids<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS), args.dims*args.num_cluster*sizeof(float)>>>(d_dataset, d_centroids, d_labels, args.dims, args.num_cluster, std::numeric_limits<float>::max(), args.number_of_values);
   //Sync
+
+  #ifdef PRINT_TIMES
   cudaEventRecord(stop_t);
+  #endif
+
   cudaDeviceSynchronize();
-  // check for error
-  cudaError_t error = cudaGetLastError();
-  if(error != cudaSuccess)
-  {
-    // print the CUDA error message and exit
-    printf("CUDA error: %s\n", cudaGetErrorString(error));
-    exit(-1);
-  }
 
   #ifdef PRINT_TIMES
     float total_time = 0;
@@ -141,26 +196,53 @@ __global__ void d_cuda_shared_find_nearest_centroids(float * dataset, float * ce
 
 void cuda_shared_average_labeled_centroids(float * d_centroids, float * d_dataset, int * d_labels, options_t &args){
   // Allocate Device Memory
+  #ifdef PRINT_TIMES
   cudaEvent_t start_t, stop_t;
   cudaEventCreate(&start_t);
   cudaEventCreate(&stop_t);
+
+  cudaEvent_t mem_start, mem_stop;
+  cudaEventCreate(&mem_start);
+  cudaEventCreate(&mem_stop);
+  #endif
 
   int * d_points_in_centroids;
   cudaMalloc ((void **)&d_points_in_centroids, args.num_cluster*sizeof(int));
 
   // Transfer Memory From Host To Device
 
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
+
   cudaMemset(d_points_in_centroids, 0, args.num_cluster * sizeof(int)); // Should start from zero?
   cudaMemset(d_centroids, 0, args.num_cluster * args.dims * sizeof(float)); // Should start from zero?
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
+
   // Launch the kernel
   int num_blocks = args.number_of_values/NUMBER_OF_THREADS;
   if (num_blocks == 0) num_blocks = 1;
-  cudaEventCreate(&start_t);
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(start_t);
+  #endif
 
   d_cuda_shared_average_labeled_centroids<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS), args.dims*args.num_cluster*sizeof(float)>>>(d_dataset, d_labels, d_points_in_centroids, d_centroids, args.number_of_values, args.dims, args.num_cluster);
 
   // Sync
+  #ifdef PRINT_TIMES
   cudaEventRecord(stop_t);
+  #endif
+
   cudaDeviceSynchronize();
   #ifdef PRINT_TIMES
   float total_time = 0;
@@ -169,10 +251,17 @@ void cuda_shared_average_labeled_centroids(float * d_centroids, float * d_datase
   #endif
   num_blocks = args.num_cluster*args.dims/NUMBER_OF_THREADS;
   if (num_blocks == 0) num_blocks = 1;
-  cudaEventCreate(&start_t);
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(start_t);
+  #endif
+
   d_cuda_shared_average_labeled_centroids_divide<<<num_blocks,NUMBER_OF_THREADS>>>(d_centroids, d_points_in_centroids, args.dims, args.num_cluster);
   // Sync
+
+  #ifdef PRINT_TIMES
   cudaEventRecord(stop_t);
+  #endif
 
   cudaDeviceSynchronize();
   #ifdef PRINT_TIMES
@@ -238,9 +327,14 @@ bool cuda_shared_converged(float * d_new_centroids, float* d_old_centroids, opti
   int * h_converged = (int *) malloc(sizeof(int));
 
   // Allocate Device Memory
+  #ifdef PRINT_TIMES
   cudaEvent_t start_t, stop_t;
   cudaEventCreate(&start_t);
   cudaEventCreate(&stop_t);
+  cudaEvent_t mem_start, mem_stop;
+  cudaEventCreate(&mem_start);
+  cudaEventCreate(&mem_stop);
+  #endif
 
   //Allocate Device Memory
   float * d_intermediate_values;
@@ -249,16 +343,36 @@ bool cuda_shared_converged(float * d_new_centroids, float* d_old_centroids, opti
   cudaMalloc((void**)&d_intermediate_values, args.num_cluster*sizeof(float));
   cudaMalloc((void**)&d_converged, sizeof(int));
 
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
   // Transfer Memory from Host to Device
   cudaMemset(d_intermediate_values, 0, args.num_cluster * sizeof(float)); // Should start from zero?
   cudaMemset(d_converged, 0, sizeof(int)); // Should start from zero?
 
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
+
   int num_blocks = args.num_cluster*args.dims/NUMBER_OF_THREADS;
   if (num_blocks == 0) num_blocks = 1;
+
+  #ifdef PRINT_TIMES
   cudaEventRecord(start_t);
+  #endif
 
   d_cuda_shared_convergence_helper<<<dim3(num_blocks), dim3(NUMBER_OF_THREADS)>>>(d_new_centroids, d_old_centroids, d_intermediate_values, args.dims, args.num_cluster);
+
+  #ifdef PRINT_TIMES
   cudaEventRecord(stop_t);
+  #endif
+
   cudaDeviceSynchronize();
 
   #ifdef PRINT_TIMES
@@ -268,10 +382,16 @@ bool cuda_shared_converged(float * d_new_centroids, float* d_old_centroids, opti
   num_blocks = args.num_cluster/NUMBER_OF_THREADS;
   #endif
   if (num_blocks == 0) num_blocks = 1;
+
+  #ifdef PRINT_TIMES
   cudaEventRecord(start_t);
+  #endif
 
   d_cuda_shared_convergence_helper_threshold<<<num_blocks, NUMBER_OF_THREADS>>>(d_intermediate_values, d_converged, args.num_cluster, args.threshold);
+
+  #ifdef PRINT_TIMES
   cudaEventRecord(stop_t);
+  #endif
 
   cudaDeviceSynchronize();
   #ifdef PRINT_TIMES
@@ -280,8 +400,24 @@ bool cuda_shared_converged(float * d_new_centroids, float* d_old_centroids, opti
   cudaEventElapsedTime(&total_time, start_t, stop_t);
   std::cout << "cuda_converged 2: " << total_time << std::endl;
   #endif
+
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_start);
+  #endif
   // Copy Memory back from Device to Host
+
   cudaMemcpy(h_converged, d_converged, sizeof(int), cudaMemcpyDeviceToHost);
+
+  #ifdef PRINT_TIMES
+  cudaEventRecord(mem_stop);
+  cudaDeviceSynchronize();
+  {
+    float temp =  0;
+    cudaEventElapsedTime(&temp, mem_start, mem_stop);
+    mem_time += temp;
+  }
+  #endif
 
   bool converged = true;
   if (*h_converged != 0){

@@ -9,6 +9,8 @@
 #include "kmeans_thrust.h"
 #include "kmeans_cpu.h"
 
+#define PRINT_TIMES
+
 using namespace std;
 
 int main(int argc, char **argv)
@@ -33,6 +35,11 @@ int main(int argc, char **argv)
         }
     }
 
+    #ifdef PRINT_TIMES
+    // Start timer
+    auto start = std::chrono::high_resolution_clock::now();
+    #endif
+
     if (opts.use_cpu){
         kmeans_cpu(vals, centroids, opts);
     } else if (opts.use_cuda_shared){
@@ -42,6 +49,13 @@ int main(int argc, char **argv)
     } else if (opts.use_thrust){
         kmeans_thrust(vals, centroids, opts);
     }
+
+    #ifdef PRINT_TIMES
+    //End timer and print out elapsed
+    auto end = std::chrono::high_resolution_clock::now();
+    auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    std::cout << "KMEANS Time: " << diff.count() << std::endl;
+    #endif
 
     if (!opts.use_thrust){
 
